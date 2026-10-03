@@ -1,4 +1,4 @@
-# Tracy 2.0 — AI agent control layer
+# Tracy — AI agent control layer
 
 Tracy sits between an agent and sensitive actions: signed intent → task/policy check → optional human approval → controlled execution → independent readback → signed receipt.
 
