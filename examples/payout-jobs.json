@@ -1,0 +1,7 @@
+[
+  {
+    "request_id": "payout_example_001",
+    "to": "REPLACE_WITH_ALLOWED_RECIPIENT",
+    "amount": 0.01
+  }
+]

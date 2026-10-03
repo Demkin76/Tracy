@@ -1,0 +1,12 @@
+import {chromium,expect} from "@playwright/test";
+import fs from "node:fs/promises";
+const browser=await chromium.launch({channel:"chrome",headless:true});
+const page=await browser.newPage({viewport:{width:1440,height:1000}});
+await page.goto("http://127.0.0.1:8000/explore");
+await expect(page.locator(".public-agent-card")).toHaveCount(2);
+await page.screenshot({path:"../data/platform-presentation/catalog-desktop.png",fullPage:true});
+await page.setViewportSize({width:390,height:844});
+expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+await page.screenshot({path:"../data/platform-presentation/catalog-mobile.png",fullPage:true});
+await browser.close();
+console.log("Final catalog desktop/mobile checked");

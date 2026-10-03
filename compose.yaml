@@ -1,0 +1,22 @@
+services:
+  tracy:
+    build: .
+    restart: unless-stopped
+    init: true
+    env_file: .env
+    environment:
+      POA_DATABASE_PATH: /app/data/poa.sqlite3
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - tracy-data:/app/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    stop_grace_period: 60s
+volumes:
+  tracy-data:

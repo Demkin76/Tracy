@@ -1,0 +1,84 @@
+import {chromium,expect} from "@playwright/test";
+import fs from "node:fs/promises";
+import path from "node:path";
+const root=path.resolve(".."),base="http://127.0.0.1:8000",out=path.join(root,"data/qa-control");
+await fs.mkdir(out,{recursive:true});
+const credentials=JSON.parse(await fs.readFile(path.join(root,"data/tracy-owner.json"),"utf8"));
+const demo=JSON.parse(await fs.readFile(path.join(root,"data/control-demo.json"),"utf8"));
+const browser=await chromium.launch({channel:"chrome",headless:true});
+const context=await browser.newContext({viewport:{width:1440,height:1000}});
+const page=await context.newPage(),errors=[],report={checks:[],started_at:new Date().toISOString()};
+page.on("pageerror",e=>errors.push(e.message));
+const check=t=>{report.checks.push(t);console.log(t)};
+async function waitStatus(id,status){await expect.poll(async()=>{
+ const response=await context.request.get(base+"/v2/intents/"+id);expect(response.ok()).toBeTruthy();return(await response.json()).status;
+},{timeout:90000,intervals:[1000,3000]}).toBe(status)}
+try{
+ await page.goto(base);
+ await page.getByLabel("Email",{exact:true}).fill(credentials.email);
+ await page.getByLabel("Password",{exact:true}).fill(credentials.password);
+ await page.getByRole("button",{name:"Sign in",exact:true}).click();
+ await expect(page.getByRole("heading",{name:"Agent control center"})).toBeVisible();
+ check("Control center is the primary product screen");
+ for(const item of demo.intents.filter(i=>["database.insert","github.pull_request"].includes(i.action)&&i.status==="AWAITING_APPROVAL")){
+  await page.goto(base+"/control/intents/"+item.id);
+  await expect(page.getByRole("heading",{name:"Human decision required"})).toBeVisible();
+  await page.screenshot({path:path.join(out,item.action+"-approval.png"),fullPage:true});
+  await page.getByLabel("Decision note").fill("Approved local integration test only");
+  await page.getByRole("button",{name:"Approve this intent",exact:true}).click();
+  await waitStatus(item.id,"VERIFIED");
+  await expect(page.getByRole("button",{name:"Verify evidence now"})).toBeVisible({timeout:15000});
+  await page.getByRole("button",{name:"Verify evidence now"}).click();
+  await expect(page.locator("pre").filter({hasText:'"verified_result": true'})).toBeVisible({timeout:20000});
+  check(item.action+" approved, executed and independently read back");
+ }
+ const http=demo.intents.find(i=>i.action==="http.invoke");
+ await waitStatus(http.id,"VERIFIED");
+ check("Configured HTTP operation executed without manual approval and matched provider readback");
+ await page.goto(base+"/control");
+ await page.getByLabel("Protected agent name",{exact:true}).fill("Browser control QA");
+ await page.getByRole("button",{name:"Create protected agent",exact:true}).click();
+ await page.getByRole("link",{name:"Configure policy & task",exact:true}).click();
+ report.agent_id=page.url().split("/").pop();
+ await page.getByRole("button",{name:"Add permission",exact:true}).click();
+ await page.getByLabel("Rule resource 1",{exact:true}).selectOption("demo-records");
+ await page.getByLabel("Allowed targets 1",{exact:true}).fill("tracy_records");
+ await page.getByRole("button",{name:"Save control policy",exact:true}).click();
+ await expect(page.getByText("Policy saved.",{exact:false})).toBeVisible();
+ await page.getByLabel("Task purpose",{exact:true}).fill("Save a browser test result after human review");
+ await page.getByRole("button",{name:"Grant task",exact:true}).click();
+ await expect(page.getByText("Task granted.",{exact:false})).toBeVisible();
+ await page.locator("summary").filter({hasText:"Submit a test intent"}).click();
+ await page.getByLabel("Granted task",{exact:true}).selectOption({label:"Save a browser test result after human review"});
+ await page.getByLabel("Execution resource",{exact:true}).selectOption("demo-records");
+ await page.getByRole("button",{name:"Submit signed intent",exact:true}).click();
+ await expect(page.getByRole("heading",{name:"Human decision required"})).toBeVisible();
+ report.denied_intent=page.url().split("/").pop();
+ await page.getByRole("button",{name:"Deny this intent",exact:true}).click();
+ await expect(page.getByText("Execution was blocked.",{exact:true})).toBeVisible();
+ check("Browser identity, policy, task, signed intent and human denial work end to end");
+ await page.reload();
+ await expect(page.getByText("Execution was blocked.",{exact:true})).toBeVisible();
+ const bundle=await(await context.request.get(base+"/v2/agents/"+report.agent_id+"/export")).json();
+ expect(bundle.receipts.length).toBe(1);expect(bundle.items.length).toBeGreaterThan(3);
+ await fs.writeFile(path.join(out,"audit-bundle.json"),JSON.stringify(bundle,null,2));
+ await page.screenshot({path:path.join(out,"denied-intent-desktop.png"),fullPage:true});
+ await page.setViewportSize({width:390,height:844});
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ await page.screenshot({path:path.join(out,"denied-intent-mobile.png"),fullPage:true});
+ await page.goto(base+"/control/resources");
+ await expect(page.getByRole("heading",{name:"Local controlled database",exact:true})).toBeVisible();
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ await page.screenshot({path:path.join(out,"resources-mobile.png"),fullPage:true});
+ await page.setViewportSize({width:1440,height:1000});
+ await page.goto(base+"/control");
+ await expect(page.getByRole("heading",{name:"Agent control center"})).toBeVisible();
+ await page.screenshot({path:path.join(out,"control-desktop.png"),fullPage:true});
+ expect(errors).toEqual([]);
+ check("Audit export, reload, desktop/mobile and browser error checks passed");
+ report.passed=true;
+}catch(e){
+ report.passed=false;report.error=String(e);
+ await page.screenshot({path:path.join(out,"failure.png"),fullPage:true});
+ throw e;
+}finally{report.browser_errors=errors;await fs.writeFile(path.join(out,"report.json"),JSON.stringify(report,null,2));await browser.close()}
