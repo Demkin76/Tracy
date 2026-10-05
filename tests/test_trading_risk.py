@@ -62,7 +62,7 @@ def test_baseline_does_not_change_after_deploy(env):
     s, _ = deploy(env)
     sid = s["strategy_id"]
     baseline = s["performance"]["baseline_test_id"]
-    env.client.post("/v1/strategies/" + sid + "/tests", json={"dataset": "stress"}).raise_for_status()
+    env.client.post("/v1/strategies/" + sid + "/tests", json={"dataset": "historical"}).raise_for_status()
     updated = env.client.get("/v1/strategies/" + sid).json()
     assert updated["performance"]["baseline_test_id"] == baseline
 
@@ -164,7 +164,7 @@ def test_trade_lookup_uses_agent_signature_without_owner_key(env):
     )
     protected = client.protect(AgentIdentity("agent_test", env.keys["private_seed"]))
     quote = protected.quote(s["strategy_id"])
-    assert quote["mode"] == "paper" and quote["context"]["synthetic"] is True
+    assert quote["mode"] == "paper" and quote["context"]["synthetic"] is False
     assert quote["context"]["price"] == 146.16
     item = protected.intent(
         "trading.order",

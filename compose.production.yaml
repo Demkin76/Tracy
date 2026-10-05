@@ -1,0 +1,42 @@
+services:
+  tracy:
+    build: .
+    restart: unless-stopped
+    init: true
+    env_file: .env.production
+    environment:
+      POA_ENVIRONMENT: production
+      POA_COOKIE_SECURE: "true"
+      POA_DEVNET_ENABLED: "false"
+      POA_DATABASE_PATH: /app/data/tracy.sqlite3
+      POA_CONTROL_RESOURCES_PATH: /app/data/resources.json
+      POA_CONTROL_CREDENTIALS_PATH: /app/data/credentials.json
+    command: ["/app/.venv/bin/python", "-m", "uvicorn", "backend.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--proxy-headers", "--forwarded-allow-ips", "*"]
+    expose: ["8000"]
+    volumes: ["tracy-data:/app/data"]
+    read_only: true
+    tmpfs: ["/tmp"]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    stop_grace_period: 60s
+    networks: ["app"]
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    environment:
+      TRACY_DOMAIN: ${TRACY_DOMAIN:?Set TRACY_DOMAIN to your public hostname}
+    ports: ["80:80", "443:443", "443:443/udp"]
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      tracy:
+        condition: service_healthy
+    networks: ["app"]
+networks:
+  app:
+volumes:
+  tracy-data:
+  caddy-data:
+  caddy-config:

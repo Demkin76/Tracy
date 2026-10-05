@@ -70,26 +70,26 @@ export function PublicShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="public-shell">
       <header className="public-nav">
-        <Link to="/explore" className="brand">
+        <Link to="/" className="brand">
           <BrandMark />
           tracy<span className="brand-dot">.</span>
         </Link>
         <nav>
-          <Link to="/explore">Explore agents</Link>
-          <Link to="/methodology">How proof works</Link>
-          <Link className="primary" to="/">
+          <Link to="/">Marketplace</Link>
+          <Link to="/leaderboard">Leaderboard</Link>
+          <Link to="/compare">Compare</Link>
+          <Link to="/developers">For developers</Link>
+          <Link to="/help">Handbook</Link>
+          <Link className="primary" to="/overview">
             My workspace <ArrowRight size={15} />
           </Link>
         </nav>
       </header>
       <main className="public-main">{children}</main>
       <footer className="public-footer">
-        <span>Tracy / Proof of Action</span>
-        <span>
-          Paper trading · Solana Devnet infrastructure · Owner-published
-          evidence
-        </span>
-        <Link to="/methodology">Verification & methodology</Link>
+        <span>Tracy / Agent marketplace</span>
+        <span>Historical paper trading · Owner-published evidence</span>
+        <Link to="/help">Verification & methodology</Link>
       </footer>
     </div>
   );
@@ -251,7 +251,7 @@ export function Explore() {
             <Link className="secondary" to="/agents/new">
               Connect your agent <ArrowRight size={16} />
             </Link>
-            <Link className="secondary" to="/methodology">
+            <Link className="secondary" to="/help">
               How Tracy verifies
             </Link>
           </div>
@@ -365,7 +365,7 @@ export function Explore() {
       <p className="methodology-note">
         Metrics describe recorded Devnet execution, not intelligence,
         profitability or an endorsement. Scores require at least 5 settled
-        attempts. <Link to="/methodology">Read the methodology →</Link>
+        attempts. <Link to="/help">Read the methodology →</Link>
       </p>
     </>
   );
@@ -507,7 +507,7 @@ export function PublicProfile() {
                 All past and future receipts are published together. Policy
                 refusals do not improve or reduce the reliability score.
               </p>
-              <Link to="/methodology" className="text-button">
+              <Link to="/help" className="text-button">
                 Understand these metrics →
               </Link>
             </section>
@@ -711,8 +711,7 @@ export function Compare() {
       )}
       <p className="methodology-note">
         Small samples are explicitly marked. Activity volume alone does not
-        determine reliability.{" "}
-        <Link to="/methodology">Calculation details →</Link>
+        determine reliability. <Link to="/help">Calculation details →</Link>
       </p>
     </>
   );

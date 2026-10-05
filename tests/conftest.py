@@ -111,3 +111,26 @@ def env(tmp_path):
             registration=registration,
             user=signup.json()["user"],
         )
+
+
+@pytest.fixture(autouse=True)
+def recorded_market_transport(monkeypatch):
+    """Deterministic exchange transport for unit tests only; live smoke uses the real API."""
+    from backend.market_data.provider import SECONDS, MarketData
+    from tests.market_data_fixture import candles
+
+    def fetch(self, params):
+        count, start = params["limit"], params["startTime"] // 1000
+        market = params["symbol"].removesuffix("USDC") + "/USDC"
+        timeframe = params["interval"]
+        step = SECONDS[timeframe]
+        result = []
+        for offset in range(0, count, 96):
+            dataset = "stress" if offset + 96 >= count else "trending"
+            bars = candles(market, timeframe, start + offset * step, min(96, count - offset), dataset)
+            for bar in bars:
+                price = bar["price"]
+                result.append([bar["timestamp"] * 1000, str(price), str(price * 1.01), str(price * .99), str(price), "100", (bar["timestamp"] + step) * 1000 - 1, str(price * 100), 10])
+        return result
+
+    monkeypatch.setattr(MarketData, "_fetch", fetch)

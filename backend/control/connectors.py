@@ -41,6 +41,10 @@ class Registry:
         raise HTTPException(404, "Resource is not assigned to this workspace")
 
     def adapter(self, resource):
+        if self.settings.environment == "production" and resource.get("local_test"):
+            raise HTTPException(503, "Local test connectors are disabled in production")
+        if resource["kind"] == "solana" and not self.settings.devnet_enabled:
+            raise HTTPException(503, "Devnet execution is disabled for this deployment")
         classes = {
             "solana": SolanaAdapter,
             "database": DatabaseAdapter,
@@ -60,6 +64,8 @@ class Registry:
     def public(self, owner_id):
         result = []
         for r in self.resources():
+            if r["kind"] == "solana" and not self.settings.devnet_enabled:
+                continue
             if "*" in r["owner_ids"] or owner_id in r["owner_ids"]:
                 a = self.adapter(r)
                 result.append(

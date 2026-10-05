@@ -8,7 +8,7 @@ from fastapi import HTTPException
 from backend.crypto.hashing import digest
 from backend.crypto.signatures import encode_base64, public_key, sign
 from backend.degradation.service import DegradationService
-from backend.market_data.service import candles
+from backend.market_data.provider import MarketData, provenance
 from backend.performance.service import PerformanceService
 from backend.strategies.models import VersionInput
 from backend.trading.adapters import run_backtest
@@ -24,6 +24,7 @@ class StrategyService:
             receipts,
             settings,
         )
+        self.market_data = MarketData(db)
         self.trading = TradingService(self)
         self.performance = PerformanceService(self)
         self.degradation = DegradationService(self)
@@ -121,17 +122,21 @@ class StrategyService:
         return self.get(sid, owner_id)
 
     def test(self, sid, owner_id, payload):
+        initial = self.get(sid, owner_id)
+        window = self.market_data.window(initial["market"], initial["timeframe"], payload.bars + 96, payload.period_start)
+        history = self.market_data.slice(window, 0, payload.bars)
+        replay = self.market_data.slice(window, payload.bars, 96)
+        bars = history["bars"]
         with self.db.connect(write=True) as conn:
             strategy = self.get(sid, owner_id, conn=conn)
             if strategy["status"] == "ARCHIVED":
                 raise HTTPException(409, "Archived strategies cannot run tests")
+            if strategy["version"] != initial["version"]:
+                raise HTTPException(409, "Strategy changed while fetching data; run the test again")
             now = int(time.time())
             test_id = "test_" + uuid4().hex
             prior = strategy["status"]
             conn.execute("UPDATE strategies SET status='TESTING' WHERE strategy_id=?", (sid,))
-            bars = candles(
-                strategy["market"], strategy["timeframe"], payload.period_start, payload.bars, payload.dataset
-            )
             body = run_backtest(strategy, bars)
             body.update(
                 test_id=test_id,
@@ -141,6 +146,9 @@ class StrategyService:
                 market_period_start=bars[0]["timestamp"],
                 market_period_end=bars[-1]["timestamp"],
                 dataset=payload.dataset,
+                market_data=provenance(history),
+                replay_snapshot_id=replay["snapshot_id"],
+                replay_market_data=provenance(replay),
                 started_at=now,
                 finished_at=int(time.time()),
                 strategy_snapshot={k: strategy[k] for k in VersionInput.model_fields},
@@ -185,11 +193,16 @@ class StrategyService:
             if s["status"] != "VALIDATED":
                 raise HTTPException(409, "Complete a test of this version before deploying")
             t = conn.execute(
-                "SELECT test_id FROM strategy_tests WHERE strategy_id=? AND strategy_version=? ORDER BY started_at DESC,rowid DESC LIMIT 1",
+                "SELECT test_id,body FROM strategy_tests WHERE strategy_id=? AND strategy_version=? ORDER BY started_at DESC,rowid DESC LIMIT 1",
                 (sid, s["version"]),
             ).fetchone()
             if not t:
                 raise HTTPException(409, "This version has no test")
+            test_body = json.loads(t["body"])
+            snapshot_id = test_body.get("replay_snapshot_id")
+            if not snapshot_id:
+                raise HTTPException(409, "Run a new test on real market data before deploying")
+            self.market_data.get(snapshot_id)
             key = Ed25519PrivateKey.generate()
             dep = "deploy_" + uuid4().hex
             now = int(time.time())
@@ -197,6 +210,7 @@ class StrategyService:
                 "INSERT INTO trading_deployments VALUES(?,?,?,'LIVE',0,?,?,?,?)",
                 (dep, sid, s["version"], now, t[0], encode_base64(key.private_bytes_raw()), public_key(key)),
             )
+            conn.execute("INSERT INTO deployment_market_data VALUES(?,?)", (dep, snapshot_id))
             conn.execute("UPDATE strategies SET status='LIVE',updated_at=? WHERE strategy_id=?", (now, sid))
             self.control.event(
                 conn,
@@ -274,6 +288,10 @@ class StrategyService:
             ]
         if public:
             s = {k: v for k, v in s.items() if k not in ("owner_id",)}
+        else:
+            with self.db.connect() as conn:
+                plan = conn.execute("SELECT plan_id FROM agent_plans WHERE strategy_id=? AND owner_id=?", (sid, owner_id)).fetchone()
+                s["onboarding_plan_id"] = plan[0] if plan else None
         return {**s, "performance": perf, "health": health, "versions": versions}
 
     def list(self, owner_id):

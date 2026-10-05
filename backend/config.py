@@ -1,13 +1,25 @@
 from pathlib import Path
+from typing import Literal
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="POA_", env_file=".env", extra="ignore")
 
+    copilot_provider: Literal["auto", "gemini", "openai", "reference"] = "auto"
+    gemini_api_key: SecretStr | None = None
+    gemini_api_key_2: SecretStr | None = None
+    gemini_model: str = Field(default="gemini-3.1-flash-lite", pattern=r"^gemini-[a-zA-Z0-9._-]+$")
+    copilot_api_key: SecretStr | None = None
+    copilot_model: str = "gpt-4o-mini"
+
     admin_token: SecretStr | None = None  # Legacy configuration only; never accepted for authentication.
+    environment: Literal["development", "production"] = "development"
+    allowed_hosts: list[str] = ["localhost", "127.0.0.1", "testserver"]
+    signup_enabled: bool = True
+    devnet_enabled: bool = True
     signing_seed: SecretStr
     execution_wallet_seed: SecretStr
     control_credentials_path: Path = Path("data/control-credentials.json")
@@ -34,3 +46,16 @@ class Settings(BaseSettings):
         if not value.startswith("https://"):
             raise ValueError("Only HTTPS Devnet RPC endpoints are supported")
         return value
+
+    @model_validator(mode="after")
+    def production_settings(self):
+        if self.environment == "production":
+            if not self.cookie_secure:
+                raise ValueError("Production requires secure cookies and HTTPS")
+            if not self.allowed_hosts or any(h == "*" or h == "testserver" for h in self.allowed_hosts):
+                raise ValueError("Set explicit production allowed hosts")
+            if any(not origin.startswith("https://") for origin in self.cors_origins):
+                raise ValueError("Production CORS origins must use HTTPS")
+            if self.devnet_enabled:
+                raise ValueError("Disable Devnet execution for the paper MVP")
+        return self

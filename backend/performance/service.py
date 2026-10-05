@@ -64,6 +64,8 @@ class PerformanceService:
             "strategy_id": sid,
             "strategy_version": version,
             "mode": "paper",
+            "market_data": reference.get("market_data") if reference else None,
+            "replay_market_data": reference.get("replay_market_data") if reference else None,
             "backtest": baseline,
             "live": live,
             "backtest_return": baseline["return_pct"] if baseline else None,
@@ -76,7 +78,7 @@ class PerformanceService:
             "track_record_start": trades[0]["timestamp"] if trades else None,
             "track_record_end": trades[-1]["timestamp"] if trades else None,
             "regime": market_regime,
-            "comparison_note": "Different synthetic periods, cumulative unannualized returns. Not an apples-to-apples forecast.",
+            "comparison_note": "Backtest and paper replay use different recorded market periods; returns are cumulative and unannualized. Simulated fills are not exchange executions.",
             "deployment": {
                 k: deployment[k]
                 for k in (

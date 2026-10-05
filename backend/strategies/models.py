@@ -57,8 +57,8 @@ class NewVersion(VersionInput):
 
 
 class TestRequest(StrictModel):
-    dataset: Literal["trending", "choppy", "stress"] = "trending"
-    period_start: int = Field(default=1756684800, ge=0, le=4000000000, strict=True)
+    dataset: Literal["historical"] = "historical"
+    period_start: int | None = Field(default=None, ge=0, le=4000000000, strict=True)
     bars: int = Field(default=96, ge=30, le=240, strict=True)
 
 

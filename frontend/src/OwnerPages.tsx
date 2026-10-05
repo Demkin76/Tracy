@@ -50,6 +50,12 @@ function Heading({ title, text }: { title: string; text: string }) {
   );
 }
 export function AuthScreen({ onLogin }: { onLogin: (user: User) => void }) {
+  const [registrationOpen, setRegistrationOpen] = useState(false);
+  useEffect(() => {
+    void api<{ signup_enabled: boolean }>("/config")
+      .then((c) => setRegistrationOpen(c.signup_enabled))
+      .catch(() => {});
+  }, []);
   const [signup, setSignup] = useState(false),
     [email, setEmail] = useState(""),
     [password, setPassword] = useState(""),
@@ -90,11 +96,14 @@ export function AuthScreen({ onLogin }: { onLogin: (user: User) => void }) {
         <div>
           <div className="hero-tag">A RECORD YOU CAN VERIFY</div>
           <h1>
-            Give your agents
+            Trading agents.
             <br />
-            clear boundaries.
+            Verifiable results.
           </h1>
-          <p>Connect a bot. Set its budget. Know what happened.</p>
+          <p>
+            Compare public agents. Test a personal instance. Publish evidence
+            others can inspect.
+          </p>
           <div className="auth-benefits">
             <span>
               <ShieldCheck /> Enforced spending policies
@@ -103,18 +112,18 @@ export function AuthScreen({ onLogin }: { onLogin: (user: User) => void }) {
               <KeyRound /> Requests signed by your agent
             </span>
             <span>
-              <Check /> Receipts backed by on-chain evidence
+              <Check /> Signed execution evidence
             </span>
           </div>
         </div>
-        <small>Solana Devnet · Test funds only</small>
+        <small>Recorded market data · Paper execution</small>
       </section>
       <section className="auth-form">
         <div className="eyebrow">WELCOME TO TRACY</div>
         <h1>{signup ? "Create your workspace." : "Welcome back."}</h1>
         <p>
           {signup
-            ? "Start with your first agent and a daily budget."
+            ? "Test agents from the marketplace or develop and publish your own."
             : "Sign in to manage your agents and proofs."}
         </p>
         <ErrorBox text={error} />
@@ -172,6 +181,7 @@ export function AuthScreen({ onLogin }: { onLogin: (user: User) => void }) {
         </div>
         <button
           className="text-button"
+          disabled={!registrationOpen}
           onClick={() => {
             setSignup(!signup);
             setError("");
@@ -179,7 +189,9 @@ export function AuthScreen({ onLogin }: { onLogin: (user: User) => void }) {
         >
           {signup
             ? "Already have an account? Sign in"
-            : "New to Tracy? Create an account"}
+            : registrationOpen
+              ? "New to Tracy? Create an account"
+              : "Registration is closed · contact the operator"}
         </button>
       </section>
     </div>
@@ -203,10 +215,13 @@ export function AgentsPage() {
     <>
       <Heading
         title="Your agents."
-        text="Own the keys. Define the limits. Follow every action."
+        text="Define the intent. Review the limits. Follow every action."
       />
       <div className="toolbar">
         <span>{agents.length} connected agents</span>
+        <Link className="secondary" to="/agents/register">
+          Connect SDK identity
+        </Link>
         <Link className="primary" to="/agents/new">
           <Plus size={16} /> Create agent
         </Link>
@@ -215,9 +230,10 @@ export function AgentsPage() {
       {!agents.length ? (
         <div className="panel empty">
           <Bot size={36} />
-          <h3>Connect your first agent</h3>
+          <h3>Describe your first agent</h3>
           <p>
-            Use a browser demo key or bring a public key from the Python SDK.
+            Start with its job, test the guardrails and review before
+            deployment.
           </p>
           <Link className="primary" to="/agents/new">
             Create agent <ArrowRight size={16} />
@@ -931,7 +947,10 @@ export function ConnectPage() {
         <h2>Bring an existing key</h2>
         <p className="form-help">
           Generate a key locally, then paste its agent ID and public key into
-          Create agent → Use my SDK public key.
+          <Link to="/agents/register">
+            Connect SDK identity → Use my SDK public key
+          </Link>
+          .
         </p>
         <pre>
           {

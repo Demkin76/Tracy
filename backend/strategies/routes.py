@@ -1,3 +1,5 @@
+import json
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from backend.control.models import Decision
@@ -17,6 +19,45 @@ from backend.trading.models import QuoteRequest
 def strategy_router(service, owner):
     router = APIRouter(prefix="/v1")
 
+    @router.get("/strategy-tests")
+    def all_tests(user=Depends(owner)):
+        with service.db.connect() as conn:
+            rows = conn.execute(
+                "SELECT t.body,s.name FROM strategy_tests t JOIN strategies s ON s.strategy_id=t.strategy_id WHERE s.owner_id=? ORDER BY t.started_at DESC,t.rowid DESC LIMIT 100",
+                (user["user_id"],),
+            ).fetchall()
+        return {
+            "items": [
+                {
+                    **{
+                        k: v
+                        for k, v in json.loads(r[0]).items()
+                        if k
+                        in (
+                            "test_id",
+                            "strategy_id",
+                            "strategy_version",
+                            "started_at",
+                            "dataset",
+                            "metrics",
+                            "market_data",
+                        )
+                    },
+                    "strategy_name": r[1],
+                }
+                for r in rows
+            ]
+        }
+
+    @router.get("/trading/queue")
+    def queue(user=Depends(owner)):
+        with service.db.connect() as conn:
+            rows = conn.execute(
+                "SELECT i.intent_id,i.reason,s.name AS strategy_name FROM trading_intents i JOIN trading_deployments d ON d.deployment_id=i.deployment_id JOIN strategies s ON s.strategy_id=d.strategy_id WHERE s.owner_id=? AND i.status='AWAITING_APPROVAL' ORDER BY i.created_at LIMIT 100",
+                (user["user_id"],),
+            ).fetchall()
+        return {"items": [dict(r) for r in rows]}
+
     @router.post("/strategies", status_code=201)
     def create(payload: StrategyCreate, user=Depends(owner)):
         return service.create(payload, user["user_id"])
@@ -28,6 +69,31 @@ def strategy_router(service, owner):
     @router.get("/strategies/{sid}")
     def detail(sid: str, version: int | None = Query(None, ge=1), user=Depends(owner)):
         return service.detail(sid, user["user_id"], version)
+
+    @router.get("/strategies/{sid}/market-data")
+    def source_data(
+        sid: str,
+        kind: str = Query("backtest", pattern="^(backtest|replay)$"),
+        version: int | None = Query(None, ge=1),
+        user=Depends(owner),
+    ):
+        item = service.detail(sid, user["user_id"], version)
+        source = item["performance"]["market_data" if kind == "backtest" else "replay_market_data"]
+        if not source:
+            raise HTTPException(404, "No recorded data for this version")
+        return service.market_data.get(source["snapshot_id"])
+
+    @router.get("/public/trading/strategies/{sid}/market-data")
+    def public_source_data(
+        sid: str,
+        kind: str = Query("backtest", pattern="^(backtest|replay)$"),
+        version: int | None = Query(None, ge=1),
+    ):
+        item = service.detail(sid, version=version, public=True)
+        source = item["performance"]["market_data" if kind == "backtest" else "replay_market_data"]
+        if not source:
+            raise HTTPException(404, "No recorded data for this version")
+        return service.market_data.get(source["snapshot_id"])
 
     @router.post("/strategies/{sid}/versions", status_code=201)
     def version(sid: str, payload: NewVersion, user=Depends(owner)):

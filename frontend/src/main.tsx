@@ -1,10 +1,24 @@
+import { TradingExchange, TradingLeaderboard } from "./ExchangePages";
+import { Copilot, HelpCenter } from "./Copilot";
 import { BrandMark } from "./BrandMark";
+import {
+  DeveloperStudio,
+  StrategiesPage,
+  MonitoringPage,
+  PerformancePage,
+  GuardrailsPage,
+  TestsPage,
+  AgentRoster,
+  AgentIdentityPage,
+} from "./WorkspaceSections";
+import { AgentBuilder } from "./AgentBuilder";
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   BrowserRouter,
   Link,
   NavLink,
+  Navigate,
   Route,
   Routes,
   useNavigate,
@@ -59,7 +73,6 @@ import {
   InfrastructurePage,
   StrategyTestsPage,
   TradingProofIndex,
-  TradingExchange,
   TradingMethodology,
   TradingPublicAgent,
   TradingCompare,
@@ -212,9 +225,16 @@ function Workspace() {
     }
   };
   const publicPath =
-    ["/explore", "/compare", "/methodology", "/recover"].includes(
-      location.pathname,
-    ) ||
+    [
+      "/",
+      "/explore",
+      "/leaderboard",
+      "/compare",
+      "/methodology",
+      "/recover",
+      "/help",
+    ].includes(location.pathname) ||
+    location.pathname.startsWith("/help/") ||
     location.pathname.startsWith("/exchange/") ||
     location.pathname.startsWith("/legacy/") ||
     location.pathname.startsWith("/a/") ||
@@ -223,8 +243,13 @@ function Workspace() {
   if (publicPath)
     return (
       <PublicShell>
+        <Copilot userId={user?.user_id} />
         <Routes>
-          <Route path="/explore" element={<TradingExchange />} />
+          <Route path="/help" element={<HelpCenter />} />
+          <Route path="/help/:topic" element={<HelpCenter />} />
+          <Route path="/" element={<TradingExchange />} />
+          <Route path="/explore" element={<Navigate to="/" replace />} />
+          <Route path="/leaderboard" element={<TradingLeaderboard />} />
           <Route
             path="/exchange/strategies/:id"
             element={<StrategyDetail publicView />}
@@ -240,7 +265,10 @@ function Workspace() {
           <Route path="/compare" element={<TradingCompare />} />
           <Route path="/public/receipts/:id" element={<PublicProof />} />
           <Route path="/proof/:id" element={<PublicProof shared />} />
-          <Route path="/methodology" element={<TradingMethodology />} />
+          <Route
+            path="/methodology"
+            element={<Navigate to="/help" replace />}
+          />
           <Route path="/legacy/methodology" element={<Methodology />} />
           <Route path="/recover" element={<RecoveryPage />} />
         </Routes>
@@ -288,26 +316,42 @@ function Workspace() {
             </span>
             <div>
               {user.name}
-              <small>Personal workspace</small>
+              <small>Trading workspace</small>
             </div>
-            <span className="version">DEVNET</span>
+            <span className="version">PAPER</span>
           </div>
-          <div className="nav-label">WORKSPACE</div>
+          <div className="nav-label">EXCHANGE</div>
           <nav>
             <NavLink to="/" end>
-              <LayoutDashboard size={18} /> Overview
+              <Globe size={18} /> Agent marketplace
+            </NavLink>
+            <NavLink to="/leaderboard">
+              <BarChart3 size={18} /> Leaderboard
+            </NavLink>
+            <NavLink to="/compare">
+              <CheckCheck size={18} /> Compare agents
+            </NavLink>
+            <div className="nav-label">WORKSPACE</div>
+            <NavLink to="/infrastructure">
+              <ShieldCheck size={18} /> Guardrails
+            </NavLink>
+            <NavLink to="/developers">
+              <Terminal size={18} /> Developer studio
+            </NavLink>
+            <NavLink to="/overview">
+              <LayoutDashboard size={18} /> My workspace
             </NavLink>
             <NavLink to="/strategies">
-              <Bot size={18} /> Strategies
+              <Bot size={18} /> My strategies
             </NavLink>
             <NavLink to="/agents">
-              <Fingerprint size={18} /> Agents
+              <Fingerprint size={18} /> My instances
             </NavLink>
             <NavLink to="/tests">
               <Play size={18} /> Tests
             </NavLink>
             <NavLink to="/monitoring">
-              <Activity size={18} /> Live monitoring
+              <Activity size={18} /> Monitoring
             </NavLink>
             <NavLink to="/performance">
               <BarChart3 size={18} /> Performance
@@ -315,14 +359,11 @@ function Workspace() {
             <NavLink to="/degradation">
               <Bell size={18} /> Degradation alerts
             </NavLink>
-            <NavLink to="/explore">
-              <Globe size={18} /> Marketplace
-            </NavLink>
-            <NavLink to="/infrastructure">
-              <ShieldCheck size={18} /> Guardrails / Infrastructure
-            </NavLink>
             <NavLink to="/proofs">
               <CheckCheck size={18} /> Proofs
+            </NavLink>
+            <NavLink to="/help">
+              <ShieldCheck size={18} /> Handbook
             </NavLink>
             <NavLink to="/security">
               <Settings size={18} /> Settings
@@ -330,12 +371,12 @@ function Workspace() {
           </nav>
           <div className="sidebar-bottom">
             <div className="network">
-              <span className="dot" /> Solana Devnet <span>TESTNET</span>
+              <span className="dot" /> Binance Spot <span>PAPER</span>
             </div>
             <p>
-              Real actions.
+              Recorded prices.
               <br />
-              Verifiable outcomes.
+              Verifiable paper fills.
             </p>
             <a href="/docs" target="_blank" rel="noreferrer">
               API documentation <ArrowUpRight size={15} />
@@ -351,13 +392,14 @@ function Workspace() {
               Workspace <ChevronRight size={13} /> Tracy
             </span>
             <div>
-              <span className="dot" /> Paper trading / Devnet{" "}
+              <span className="dot" /> Historical data / Paper trading{" "}
               <span className="avatar">
                 {user.name.slice(0, 2).toUpperCase()}
               </span>
             </div>
           </header>
           <main>
+            <Copilot userId={user.user_id} />
             <ErrorBox error={error} />
             {error && (
               <button className="secondary" onClick={() => void refresh()}>
@@ -365,24 +407,19 @@ function Workspace() {
               </button>
             )}
             <Routes>
-              <Route path="/" element={<LifecycleOverview />} />
+              <Route path="/developers" element={<DeveloperStudio />} />
+              <Route path="/strategies" element={<StrategiesPage />} />
+              <Route path="/strategies/new" element={<AgentBuilder />} />
               <Route
-                path="/strategies"
-                element={<LifecycleOverview mode="Strategies" />}
+                path="/strategies/configure"
+                element={<StrategyCreatePage />}
               />
-              <Route path="/strategies/new" element={<StrategyCreatePage />} />
               <Route path="/strategies/:id" element={<StrategyDetail />} />
-              <Route path="/tests" element={<StrategyTestsPage />} />
-              <Route
-                path="/monitoring"
-                element={<LifecycleOverview mode="Live monitoring" />}
-              />
-              <Route
-                path="/performance"
-                element={<LifecycleOverview mode="Performance" />}
-              />
+              <Route path="/tests" element={<TestsPage />} />
+              <Route path="/monitoring" element={<MonitoringPage />} />
+              <Route path="/performance" element={<PerformancePage />} />
               <Route path="/degradation" element={<DegradationPage />} />
-              <Route path="/infrastructure" element={<InfrastructurePage />} />
+              <Route path="/infrastructure" element={<GuardrailsPage />} />
               <Route path="/proofs" element={<TradingProofIndex />} />
               <Route
                 path="/trading/intents/:id"
@@ -406,9 +443,10 @@ function Workspace() {
               <Route path="/installed" element={<InstalledAgents />} />
               <Route path="/install/:id" element={<InstallAgent />} />
               <Route path="/installed/:id" element={<Installation />} />
-              <Route path="/agents" element={<AgentsPage />} />
-              <Route path="/agents/new" element={<CreateAgent />} />
-              <Route path="/agents/:id" element={<AgentSettings />} />
+              <Route path="/agents" element={<AgentRoster />} />
+              <Route path="/agents/new" element={<AgentBuilder />} />
+              <Route path="/agents/register" element={<CreateAgent />} />
+              <Route path="/agents/:id" element={<AgentIdentityPage />} />
               <Route path="/demo" element={<LiveDemo />} />
               <Route path="/connect" element={<ConnectPage />} />
               <Route path="/activity" element={<ActivityPage />} />
@@ -423,7 +461,7 @@ function Workspace() {
                 path="*"
                 element={
                   <div className="empty">
-                    Page not found. <Link to="/">Back to overview</Link>
+                    Page not found. <Link to="/">Back to marketplace</Link>
                   </div>
                 }
               />
@@ -433,7 +471,7 @@ function Workspace() {
             <span>
               <ShieldCheck size={14} /> Tracy · Proof of Action
             </span>
-            <span>Your agents. Verifiable outcomes.</span>
+            <span>Agent marketplace. Verifiable paper records.</span>
           </footer>
         </div>
       </div>
@@ -854,7 +892,7 @@ function ReceiptPage() {
       <>
         <ErrorBox error={error} />
         {!error && <div className="empty">Loading receipt…</div>}
-        <Link to="/">Back to overview</Link>
+        <Link to="/">Back to marketplace</Link>
       </>
     );
   return (

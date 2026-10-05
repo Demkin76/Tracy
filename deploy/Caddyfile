@@ -1,0 +1,7 @@
+{$TRACY_DOMAIN} {
+    encode zstd gzip
+    request_body {
+        max_size 256KB
+    }
+    reverse_proxy tracy:8000
+}

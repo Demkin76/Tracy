@@ -20,6 +20,12 @@ def validate(path):
                 raise ValueError("Invalid signed receipt in backup")
             count += 1
         tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        if "market_snapshots" in tables:
+            from backend.crypto.hashing import digest
+
+            for snapshot_id, body in conn.execute("SELECT snapshot_id,body FROM market_snapshots"):
+                if digest(json.loads(body)) != snapshot_id:
+                    raise ValueError("Invalid market data snapshot in backup")
         if "control_receipts" in tables:
             from backend.control.verify import verify_bundle, verify_events
 

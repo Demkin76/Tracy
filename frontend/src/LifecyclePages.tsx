@@ -19,11 +19,65 @@ import {
   Pause,
   ArrowUpRight,
 } from "lucide-react";
+import { HelpLink } from "./Copilot";
 import canonicalize from "canonicalize";
 import { api, download } from "./api";
 import { useApp } from "./app-context";
 import { ErrorNotice, err, Status, when } from "./PublicPages";
 
+type MarketSource = {
+  provider: string;
+  market: string;
+  timeframe: string;
+  period_start: number;
+  period_end: number;
+  fetched_at: number;
+  snapshot_id: string;
+};
+function DataSource({
+  source,
+  label,
+  exportUrl,
+}: {
+  source?: MarketSource | null;
+  label: string;
+  exportUrl?: string;
+}) {
+  if (!source) return null;
+  return (
+    <div className="market-source">
+      <strong>
+        {label} · {source.provider} · {source.market}
+      </strong>
+      <span>
+        {new Date(source.period_start * 1000).toLocaleString()} —{" "}
+        {new Date(source.period_end * 1000).toLocaleString()} ·{" "}
+        {source.timeframe} candles
+      </span>
+      <small>
+        Retrieved {new Date(source.fetched_at * 1000).toLocaleString()} ·
+        snapshot {source.snapshot_id.slice(0, 16)}
+      </small>
+      <details className="source-details">
+        <summary>Source details & exact candles</summary>
+        <p>
+          Binance Spot · closed candles · UTC start{" "}
+          {new Date(source.period_start * 1000).toISOString()} · UTC end{" "}
+          {new Date(source.period_end * 1000).toISOString()}
+        </p>
+        <code>{source.snapshot_id}</code>
+        {exportUrl && (
+          <p>
+            <a href={exportUrl} target="_blank" rel="noreferrer">
+              Download candles & source metadata
+            </a>
+          </p>
+        )}
+        <HelpLink topic="data" />
+      </details>
+    </div>
+  );
+}
 type Curve = { timestamp: number | null; equity: number };
 type Metrics = {
   pnl: number;
@@ -59,6 +113,8 @@ type Health = {
   reasons: { kind: string; severity: string; message: string }[];
 };
 type Performance = {
+  market_data?: MarketSource | null;
+  replay_market_data?: MarketSource | null;
   live: Metrics;
   backtest: Metrics | null;
   backtest_return: number | null;
@@ -117,6 +173,7 @@ type Version = {
   change_note: string;
 };
 export type Strategy = Version & {
+  onboarding_plan_id?: string | null;
   strategy_id: string;
   agent_id: string;
   agent_name: string;
@@ -242,9 +299,9 @@ function Json({ value }: { value: unknown }) {
 function PaperNote() {
   return (
     <div className="paper-note">
-      <span className="mode-chip">PAPER / SYNTHETIC DATA</span> Simulated fills,
-      real policy checks and signed ledger evidence. No real funds or on-chain
-      swaps.
+      <span className="mode-chip">PAPER / EXCHANGE DATA</span> Recorded market
+      prices, simulated fills and signed ledger evidence. No real funds are
+      traded.
     </div>
   );
 }
@@ -313,14 +370,18 @@ function CurveChart({
   return (
     <div className="curve-wrap">
       <div className="chart-legend">
-        <span className="live-key">Paper live</span>
-        <span className="test-key">Backtest</span>
+        <span className="live-key">
+          {live.length > 1
+            ? "Your agent: paper replay"
+            : "Your agent: no replay observations yet"}
+        </span>
+        <span className="test-key">Strategy backtest (before deployment)</span>
         <small>Normalized progress · return %</small>
       </div>
       <svg
         viewBox="0 0 780 226"
         role="img"
-        aria-label="Paper live and backtest return curves, normalized by observation progress"
+        aria-label="Paper replay and backtest return curves, normalized by observation progress"
       >
         {[0, 1, 2, 3].map((i) => (
           <g key={i}>
@@ -362,7 +423,7 @@ function CurveChart({
         </text>
       </svg>
       <small>
-        Separate synthetic periods; curves compare progress, not matching
+        Separate recorded market periods; curves compare progress, not matching
         calendar dates.
       </small>
     </div>
@@ -373,6 +434,7 @@ function HealthPanel({ health }: { health: Health }) {
     <section className="panel health-panel">
       <div className="section-heading">
         <h2>Strategy Health</h2>
+        <HelpLink topic="health" />
         <Status value={health.status} />
       </div>
       <div className="health-number">
@@ -398,10 +460,15 @@ function HealthPanel({ health }: { health: Health }) {
         {Object.entries(health.components).map(([k, c]) => (
           <div className="score-row" key={k}>
             <span>
-              {k.replaceAll("_", " ")} · {c.weight * 100}%
+              {k.replaceAll("_", " ").replaceAll("live", "paper")} ·{" "}
+              {c.weight * 100}%
             </span>
-            <b>{num(c.score, 1)}</b>
-            <progress max="100" value={c.score} />
+            <b>
+              {health.score == null
+                ? "Insufficient observations"
+                : num(c.score, 1)}
+            </b>
+            {health.score != null && <progress max="100" value={c.score} />}
             <code>{c.formula}</code>
           </div>
         ))}
@@ -413,7 +480,7 @@ function HealthPanel({ health }: { health: Health }) {
     </section>
   );
 }
-function StrategyCard({
+export function StrategyCard({
   s,
   publicView = false,
 }: {
@@ -435,20 +502,26 @@ function StrategyCard({
         }
       >
         <h2>
-          {s.name} <span className="version-tag">v{s.version}</span>
+          {publicView ? s.agent_name : s.name}{" "}
+          <span className="version-tag">v{s.version}</span>
         </h2>
       </Link>
       <p className="muted">
-        {s.agent_name} · {s.strategy_config.runner.replaceAll("_", " ")}
+        {publicView ? s.name : s.agent_name} ·{" "}
+        {s.strategy_config.runner.replaceAll("_", " ")}
       </p>
       <div className="card-metrics">
         <div>
-          <span>Live return</span>
-          <strong className={tone(p.live_return)}>{pct(p.live_return)}</strong>
+          <span>Paper return</span>
+          <strong className={tone(p.live_return)}>
+            {p.verified_trades ? pct(p.live_return) : "—"}
+          </strong>
         </div>
         <div>
           <span>Max drawdown</span>
-          <strong>{num(p.live.max_drawdown)}%</strong>
+          <strong>
+            {p.verified_trades ? num(p.live.max_drawdown) + "%" : "—"}
+          </strong>
         </div>
         <div>
           <span>Win rate</span>
@@ -482,11 +555,11 @@ function StrategyCard({
           className="secondary"
           to={
             publicView
-              ? "/strategies/new?source=" + s.strategy_id
+              ? "/agents/new?source=" + s.strategy_id + "&version=" + s.version
               : "/strategies/" + s.strategy_id
           }
         >
-          {publicView ? "Test strategy" : "Test / Monitor"}{" "}
+          {publicView ? "Test with my limits" : "Test / Monitor"}{" "}
           <ArrowRight size={14} />
         </Link>
       </div>
@@ -524,23 +597,23 @@ export function LifecycleOverview({ mode = "Overview" }: { mode?: string }) {
   return (
     <>
       <Heading
-        title={mode === "Overview" ? "Is your strategy still working?" : mode}
-        text="Test your strategy. Prove execution. Track performance and adapt with evidence."
+        title={mode === "Overview" ? "My trading workspace" : mode}
+        text="Follow your personal paper instances and the strategies behind them."
       >
-        <Link className="primary" to="/strategies/new">
-          <Plus size={16} /> New strategy
+        <Link className="primary" to="/">
+          <ArrowRight size={16} /> Explore agents
         </Link>
       </Heading>
       <PaperNote />
       <ErrorNotice error={error || alertData.error} />
       <div className="lifecycle-ribbon">
         {[
-          "Test",
-          "Prove",
-          "Deploy",
+          "Discover",
+          "Compare evidence",
+          "Test your limits",
+          "Review & deploy",
           "Monitor",
-          "Detect degradation",
-          "Adapt",
+          "Verify",
         ].map((x, i) => (
           <span key={x}>
             <i>{String(i + 1).padStart(2, "0")}</i>
@@ -591,7 +664,7 @@ export function LifecycleOverview({ mode = "Overview" }: { mode?: string }) {
             </div>
             <div className="gap-row">
               <Metric
-                label="Paper live return"
+                label="Paper replay return"
                 value={pct(focus.performance.live_return)}
                 className={tone(focus.performance.live_return)}
               />
@@ -619,15 +692,18 @@ export function LifecycleOverview({ mode = "Overview" }: { mode?: string }) {
         </div>
       ) : (
         <section className="panel editor">
-          <h2>Bring your strategy to Tracy</h2>
+          <h2>Choose an agent from the marketplace</h2>
           <p>
-            Create a strategy, select its configuration and run a reproducible
-            test. Tracy measures the results; it does not generate a strategy
-            for you.
+            Compare its public results and evidence, test its strategy with your
+            limits, then review a personal paper instance.
           </p>
-          <Link className="primary" to="/strategies/new">
-            Create your first strategy →
+          <Link className="primary" to="/">
+            Explore agents →
           </Link>
+          <p>
+            Developing your own agent?{" "}
+            <Link to="/developers">Open developer studio →</Link>
+          </p>
         </section>
       )}
       <div className="section-heading">
@@ -777,8 +853,8 @@ function VersionFields({
         </label>
       </div>
       <p className="form-help">
-        You choose the rules. Tracy runs them against synthetic data; it does
-        not recommend or optimize a strategy.
+        You choose the rules. Tracy tests them against recorded exchange data;
+        it does not recommend or optimize a strategy.
       </p>
       <details className="form-details" open>
         <summary>Runner parameters</summary>
@@ -1020,10 +1096,41 @@ export function StrategyDetail({
 }: {
   publicView?: boolean;
 }) {
+  const [showPublication, setShowPublication] = useState(false);
+  const [sectionParams] = useSearchParams();
+  useEffect(() => {
+    if (sectionParams.get("publish") === "1") setShowPublication(true);
+  }, [sectionParams]);
+  const requestedTab = sectionParams.get("tab") || "Performance";
   const { id } = useParams(),
     navigate = useNavigate(),
-    [selected, setSelected] = useState(""),
-    [tab, setTab] = useState("Performance");
+    [selected, setSelected] = useState(sectionParams.get("version") || ""),
+    [tab, setTab] = useState(
+      [
+        "Performance",
+        "Tests",
+        "Trades & proofs",
+        "Guardrails",
+        "Versions",
+      ].includes(requestedTab)
+        ? requestedTab
+        : "Performance",
+    );
+  useEffect(() => {
+    if (
+      [
+        "Performance",
+        "Tests",
+        "Trades & proofs",
+        "Guardrails",
+        "Versions",
+      ].includes(requestedTab)
+    )
+      setTab(requestedTab);
+  }, [requestedTab]);
+  useEffect(() => {
+    setSelected(sectionParams.get("version") || "");
+  }, [sectionParams]);
   const suffix = selected ? "?version=" + selected : "",
     base = (publicView ? "/public/trading/strategies/" : "/strategies/") + id;
   const {
@@ -1039,7 +1146,7 @@ export function StrategyDetail({
     [intents, setIntents] = useState<TradingIntent[]>([]),
     [busy, setBusy] = useState(false),
     [edit, setEdit] = useState<Version | null>(null),
-    [dataset, setDataset] = useState("trending");
+    [dataset, setDataset] = useState("historical");
   async function extras() {
     if (!publicView) {
       setTests(
@@ -1111,14 +1218,24 @@ export function StrategyDetail({
         ← {publicView ? "Exchange" : "Strategies"}
       </Link>
       <Heading
-        title={s.name}
-        eyebrow={s.agent_name + " / STRATEGY v" + s.version}
+        title={publicView ? s.agent_name : s.name}
+        eyebrow={
+          (publicView ? s.name : s.agent_name) + " / STRATEGY v" + s.version
+        }
         text={
           s.description || "Test → Prove → Deploy → Monitor → Detect → Adapt"
         }
       >
         <div className="button-row">
-          <Status value={s.status} />
+          <Status value={dep?.step === 96 ? "COMPLETED" : s.status} />
+          {!publicView && (
+            <button
+              className="primary"
+              onClick={() => setShowPublication(true)}
+            >
+              {s.listed ? "Manage publication" : "Publish agent"}
+            </button>
+          )}
           <label className="inline-label">
             Version
             <select
@@ -1138,6 +1255,96 @@ export function StrategyDetail({
       </Heading>
       <PaperNote />
       <ErrorNotice error={error} />
+      {showPublication && !publicView && (
+        <section
+          className="panel editor publication-review"
+          role="dialog"
+          aria-label="Agent publication"
+        >
+          <h2>
+            {s.listed
+              ? "Manage public agent"
+              : "Publish to the agent marketplace"}
+          </h2>
+          <p>
+            Your recipe, agent identity, versions, tests, measured performance,
+            trades and proofs become public. Visitors can create their own
+            private agent from the recipe; they cannot control your agent or
+            copy its capital or keys.
+          </p>
+          <HelpLink topic="publication" />
+          <div className="button-row">
+            <button
+              className="primary"
+              disabled={busy}
+              onClick={async () => {
+                if (await act("/publication", { listed: !s.listed }, "PUT"))
+                  setShowPublication(false);
+              }}
+            >
+              {s.listed ? "Remove public listing" : "Confirm publication"}
+            </button>
+            <button
+              className="secondary"
+              onClick={() => setShowPublication(false)}
+            >
+              Cancel
+            </button>
+          </div>
+        </section>
+      )}
+      <DataSource
+        source={p.market_data}
+        label="Pre-deployment strategy test"
+        exportUrl={
+          "/v1" + base + "/market-data?kind=backtest&version=" + s.version
+        }
+      />
+      <DataSource
+        source={p.replay_market_data}
+        label={
+          publicView
+            ? "Published agent replay period"
+            : "Your agent's reserved replay period"
+        }
+        exportUrl={
+          "/v1" + base + "/market-data?kind=replay&version=" + s.version
+        }
+      />
+      {!publicView && dep && (
+        <div className="replay-explanation">
+          <strong>
+            {dep.step === 0
+              ? "Your agent has not executed yet."
+              : dep.step >= 96
+                ? "Historical replay completed."
+                : "Historical replay in progress."}
+          </strong>
+          <p>
+            {dep.step}/96 recorded candles processed · {p.verified_trades}{" "}
+            verified paper fills. The backtest was calculated before this agent
+            was created; it is not this agent's earned return.
+          </p>
+          <HelpLink topic="performance">
+            Why a new agent already has backtest data
+          </HelpLink>
+        </div>
+      )}
+      {!publicView && s.onboarding_plan_id && (
+        <div className="builder-boundary">
+          <ShieldCheck size={20} />
+          <div>
+            <strong>Created from a reviewed intent</strong>
+            <p>
+              This paper agent uses a separate recorded market period. Advance
+              the replay below to simulate actions and collect proofs.
+            </p>
+            <Link to={"/agents/new?plan=" + s.onboarding_plan_id}>
+              View original intent & deployment review →
+            </Link>
+          </div>
+        </div>
+      )}
       {current && (
         <section className="lifecycle-actions panel">
           <label>
@@ -1146,11 +1353,7 @@ export function StrategyDetail({
               value={dataset}
               onChange={(e) => setDataset(e.target.value)}
             >
-              {["trending", "choppy", "stress"].map((x) => (
-                <option key={x} value={x}>
-                  Synthetic {x}
-                </option>
-              ))}
+              <option value="historical">Recent exchange history</option>
             </select>
           </label>
           <button
@@ -1183,7 +1386,8 @@ export function StrategyDetail({
                   void act("/advance", { expected_step: dep.step, steps: 24 })
                 }
               >
-                <Play size={16} /> Advance 24 bars
+                <Play size={16} /> Replay next {Math.min(24, 96 - dep.step)}{" "}
+                candles
               </button>
               <button
                 className="secondary"
@@ -1213,14 +1417,38 @@ export function StrategyDetail({
               : "Create version"}
           </button>
           <small>
-            {dep ? "Replay " + dep.step + "/96 bars" : "Test before deployment"}
+            {dep
+              ? "Replay " + dep.step + "/96 candles · " + s.timeframe + " each"
+              : "Test before deployment"}
           </small>
         </section>
       )}
+      {dep && (
+        <div className="replay-explanation">
+          Each candle represents{" "}
+          {s.timeframe === "1h"
+            ? "1 hour"
+            : s.timeframe === "4h"
+              ? "4 hours"
+              : "1 day"}
+          . The next 24 candles cover{" "}
+          {s.timeframe === "1h"
+            ? "24 hours"
+            : s.timeframe === "4h"
+              ? "4 days"
+              : "24 days"}{" "}
+          of recorded history. This simulates decisions with your limits and
+          stops for approval when required.{" "}
+          <HelpLink topic="replay">What happens when I replay?</HelpLink>
+        </div>
+      )}
       {publicView && (
         <div className="button-row">
-          <Link className="primary" to={"/strategies/new?source=" + id}>
-            Test strategy in my workspace →
+          <Link
+            className="primary"
+            to={"/agents/new?source=" + id + "&version=" + s.version}
+          >
+            Test this agent with my limits →
           </Link>
           <Link className="secondary" to={"/compare?ids=" + id}>
             Compare risk & performance
@@ -1244,10 +1472,14 @@ export function StrategyDetail({
       )}
       <div className="metrics-v3">
         <Metric
-          label="Paper live return"
+          label="Paper replay return"
           value={pct(p.live_return)}
           className={tone(p.live_return)}
-          note={money(p.live.pnl) + " PnL"}
+          note={
+            p.verified_trades
+              ? money(p.live.pnl) + " PnL"
+              : "No executed paper trades yet"
+          }
         />
         <Metric
           label="Backtest return"
@@ -1255,7 +1487,7 @@ export function StrategyDetail({
           note="Pinned deployment baseline"
         />
         <Metric
-          label="Backtest → live gap"
+          label="Backtest → paper gap"
           value={
             p.performance_gap == null ? "—" : num(p.performance_gap) + " pp"
           }
@@ -1263,7 +1495,7 @@ export function StrategyDetail({
         />
         <Metric
           label="Max drawdown"
-          value={num(p.live.max_drawdown) + "%"}
+          value={p.verified_trades ? num(p.live.max_drawdown) + "%" : "—"}
           note={"Guardrail " + s.guardrails.max_drawdown + "%"}
         />
       </div>
@@ -1327,7 +1559,7 @@ export function StrategyDetail({
             {p.regime.current && (
               <div className="gap-row">
                 <Metric
-                  label="Synthetic price"
+                  label="Recorded price"
                   value={money(p.regime.current.price)}
                 />
                 <Metric
@@ -1348,6 +1580,7 @@ export function StrategyDetail({
       {tab === "Tests" && (
         <section className="panel editor">
           <h2>Reproducible test runs</h2>
+          <HelpLink topic="backtests" />
           <div className="table-scroll">
             <table>
               <thead>
@@ -1465,12 +1698,12 @@ export function StrategyDetail({
                 if (r) navigate("/trading/intents/" + r.intent_id);
               }}
             >
-              Submit oversized demo order
+              Check oversized order rejection
             </button>
           )}
           <p className="muted">
-            The demo order uses the same signed-intent and guardrail path. It is
-            expected to be rejected.
+            This test order uses the same signed-intent and guardrail path. It
+            is expected to be rejected.
           </p>
           <Link to="/infrastructure">
             Execution resources, approvals & integrations →
@@ -1535,7 +1768,7 @@ export function StrategyDetail({
       {!publicView && (
         <section className="panel editor publication-panel">
           <div>
-            <h2>Agent exchange publication</h2>
+            <h2>Strategy marketplace publication</h2>
             <p>
               Publishing exposes this strategy, its agent identity, versions,
               performance, trades and full proofs. Original action histories
@@ -1545,11 +1778,12 @@ export function StrategyDetail({
           <button
             className="secondary"
             disabled={busy}
-            onClick={() =>
-              void act("/publication", { listed: !s.listed }, "PUT")
-            }
+            onClick={() => {
+              setShowPublication(true);
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
           >
-            {s.listed ? "Unpublish strategy" : "Publish strategy"}
+            Review publication settings
           </button>
           {s.listed && (
             <Link to={"/exchange/strategies/" + id}>
@@ -1856,7 +2090,7 @@ export function TradingProofPage({
               </p>
               <p>
                 Decision source:{" "}
-                {p.receipt.decision_source.replaceAll("_", " ")}. Hosted demo
+                {p.receipt.decision_source.replaceAll("_", " ")}. Hosted paper
                 decisions use a separately delegated runner key.
               </p>
               <p>
@@ -1998,69 +2232,6 @@ export function StrategyTestsPage() {
     </>
   );
 }
-export function TradingExchange() {
-  const [q, setQ] = useState(""),
-    { data, error } = useRemote<{ items: Strategy[] }>(
-      "/public/trading/strategies?q=" + encodeURIComponent(q),
-    );
-  return (
-    <>
-      <section className="exchange-hero">
-        <div className="eyebrow">TRACY / AGENT EXCHANGE</div>
-        <h1>
-          Performance.
-          <br />
-          Risk. Evidence.
-        </h1>
-        <p>
-          Explore agent strategies with versioned tests, observed drawdown and
-          verifiable trade records.
-        </p>
-        <div className="button-row">
-          <Link className="primary" to="/">
-            Open your workspace <ArrowRight size={16} />
-          </Link>
-          <Link className="secondary" to="/compare">
-            Compare strategies
-          </Link>
-        </div>
-        <div className="exchange-orbit" aria-hidden="true">
-          <CheckCheck size={64} />
-          <span>TEST → PROVE → DEPLOY</span>
-        </div>
-      </section>
-      <PaperNote />
-      <div className="toolbar">
-        <h2>Published trading strategies</h2>
-        <input
-          className="exchange-search"
-          aria-label="Search strategies"
-          placeholder="Search agent or strategy…"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-        />
-      </div>
-      <ErrorNotice error={error} />
-      <div className="strategy-grid">
-        {data?.items.map((s) => (
-          <StrategyCard key={s.strategy_id} s={s} publicView />
-        ))}
-      </div>
-      {data && !data.items.length && (
-        <section className="panel editor">
-          <h2>No published strategies found</h2>
-          <p>Create, test and publish your own strategy to appear here.</p>
-          <Link to="/strategies/new">Create a strategy →</Link>
-        </section>
-      )}
-      <p className="muted">
-        All current trading track records use synthetic paper execution. Native
-        SOL Devnet action histories are preserved in the{" "}
-        <Link to="/legacy/explore">original marketplace</Link>.
-      </p>
-    </>
-  );
-}
 export function TradingPublicAgent() {
   const { id } = useParams(),
     { data, error } = useRemote<{
@@ -2075,7 +2246,10 @@ export function TradingPublicAgent() {
       <Heading
         title={data?.name || "Agent profile"}
         eyebrow="PERFORMANCE / RISK / EVIDENCE"
-        text={data?.description}
+        text={
+          data?.description ||
+          "Published strategy versions, recorded performance and evidence. Inspect a version before testing your personal instance."
+        }
       />
       <PaperNote />
       <ErrorNotice error={error} />
@@ -2087,20 +2261,14 @@ export function TradingPublicAgent() {
       {data && !data.strategies.length && (
         <p>No published trading strategy yet.</p>
       )}
-      <section className="panel editor">
-        <h2>Verified action history</h2>
-        <p>
-          Original native SOL receipts, profile and hosted payout offers remain
-          available.
-        </p>
-        {data?.legacy_listed ? (
-          <Link to={"/legacy/agents/" + id}>Open original agent profile →</Link>
-        ) : (
-          <p className="muted">
-            Original action history is not publicly disclosed.
-          </p>
-        )}
-      </section>
+      {data?.legacy_listed && (
+        <section className="panel editor">
+          <h2>Additional action evidence</h2>
+          <Link to={"/legacy/agents/" + id}>
+            Inspect the original action record →
+          </Link>
+        </section>
+      )}
     </>
   );
 }
@@ -2112,9 +2280,31 @@ export function TradingCompare() {
       selected.includes(s.strategy_id),
     );
   const rows: [string, (s: Strategy) => string][] = [
-    ["Evidence mode", () => "Synthetic paper"],
+    ["Evidence mode", () => "Historical paper replay"],
     ["Strategy version", (s) => "v" + s.version],
-    ["Live return", (s) => pct(s.performance.live_return)],
+    ["Market / interval", (s) => s.market + " / " + s.timeframe],
+    ["Starting capital", (s) => money(s.starting_capital)],
+    [
+      "Fee / slippage (bps)",
+      (s) => s.strategy_config.fee_bps + " / " + s.strategy_config.slippage_bps,
+    ],
+    [
+      "Max position / trade",
+      (s) =>
+        money(s.guardrails.max_position_size) +
+        " / " +
+        money(s.guardrails.max_trade_size),
+    ],
+    [
+      "Daily loss / drawdown limits",
+      (s) =>
+        s.guardrails.max_daily_loss + "% / " + s.guardrails.max_drawdown + "%",
+    ],
+    [
+      "Paper return",
+      (s) =>
+        s.performance.verified_trades ? pct(s.performance.live_return) : "—",
+    ],
     ["Max drawdown", (s) => num(s.performance.live.max_drawdown) + "%"],
     [
       "Win rate",
@@ -2124,7 +2314,7 @@ export function TradingCompare() {
           : num(s.performance.live.win_rate) + "%",
     ],
     [
-      "Backtest/live gap",
+      "Backtest/paper gap",
       (s) =>
         s.performance.performance_gap == null
           ? "—"
@@ -2152,13 +2342,19 @@ export function TradingCompare() {
   return (
     <>
       <Heading
-        title="Compare strategies"
+        title="Compare agents"
         text="Compare performance with risk, sample size and evidence. Returns alone are not a ranking."
       />
       <PaperNote />
       <ErrorNotice error={all.error} />
       <section className="panel editor">
-        <h2>Choose 2–4 strategies</h2>
+        <h2>Choose 2–4 agent strategies</h2>
+        {all.data && !all.data.items.length && (
+          <p>
+            No agents have been published yet.{" "}
+            <Link to="/">Open marketplace →</Link>
+          </p>
+        )}
         <div className="comparison-select">
           {all.data?.items.map((s) => (
             <label key={s.strategy_id}>
@@ -2191,7 +2387,7 @@ export function TradingCompare() {
                 {chosen.map((s) => (
                   <th key={s.strategy_id}>
                     <Link to={"/exchange/strategies/" + s.strategy_id}>
-                      {s.name}
+                      {s.agent_name} / {s.name}
                     </Link>
                   </th>
                 ))}
@@ -2210,14 +2406,14 @@ export function TradingCompare() {
           </table>
         </section>
       ) : (
-        <p className="empty">Select at least two strategies to compare.</p>
+        <p className="empty">
+          Select at least two published agent strategies to compare.
+        </p>
       )}
       <p className="muted">
         Check the replay periods and capital settings. These are cumulative,
-        unannualized returns over synthetic periods.{" "}
-        <Link to="/legacy/compare">
-          Original action reliability comparison →
-        </Link>
+        unannualized returns over historical market periods.{" "}
+        <Link to="/leaderboard">Rank agents under matching conditions →</Link>
       </p>
     </>
   );
@@ -2283,8 +2479,8 @@ export function TradingMethodology() {
           <p>
             PnL = marked portfolio equity − starting capital. Return = PnL /
             starting capital × 100. Open positions are marked at the current
-            synthetic quote; realized PnL uses average cost, including entry
-            fees.
+            recorded market quote; realized PnL uses average cost, including
+            entry fees.
           </p>
           <p>
             Win rate counts profitable sell executions among all closed sell
@@ -2299,16 +2495,17 @@ export function TradingMethodology() {
             both affect PnL.
           </p>
           <p>
-            Backtest/live gap = cumulative paper live return − pinned backtest
-            return, in percentage points. Different synthetic periods and sample
-            sizes are disclosed; this is not an annualized or risk-adjusted
-            ranking.
+            Backtest/paper gap = cumulative paper replay return − pinned
+            backtest return, in percentage points. Different recorded market
+            periods and sample sizes are disclosed; this is not an annualized or
+            risk-adjusted ranking.
           </p>
         </section>
         <section className="panel editor">
           <h2>Strategy Health</h2>
+          <HelpLink topic="health" />
           <p>
-            30% live performance + 25% drawdown + 20% backtest/live gap + 15%
+            30% paper performance + 25% drawdown + 20% backtest/paper gap + 15%
             execution fidelity + 10% recent consistency.
           </p>
           <p>

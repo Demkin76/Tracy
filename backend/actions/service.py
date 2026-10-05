@@ -63,7 +63,7 @@ class ActionService:
                 context = {
                     "agent_active": bool(agent["active"]),
                     "status_version": agent["status_version"],
-                    "execution_enabled": self.settings.execution_enabled,
+                    "execution_enabled": self.settings.execution_enabled and self.settings.devnet_enabled,
                     "owner_limit_lamports": self.settings.owner_daily_lamports,
                     "platform_limit_lamports": self.settings.platform_daily_lamports,
                     "owner_used_lamports": conn.execute(

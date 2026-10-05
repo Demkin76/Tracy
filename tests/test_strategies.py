@@ -63,7 +63,7 @@ def advance(env, s, step=0, steps=48):
 
 def test_complete_strategy_lifecycle_and_proof(env):
     s, t = deploy(env)
-    assert t["metrics"]["trade_count"] > 0 and t["source"] == "deterministic_synthetic_runner"
+    assert t["metrics"]["trade_count"] > 0 and t["source"] == "historical_exchange_backtest"
     assert (
         env.client.post(
             "/v1/strategies/" + s["strategy_id"] + "/deploy", json={"expected_version": 1}
@@ -268,3 +268,19 @@ def test_invalid_configuration_fails_closed(env):
         ).status_code
         == 422
     )
+
+
+def test_workspace_tests_and_approvals_are_owner_scoped(env):
+    s, tested = deploy(env, guardrails={"human_approval_above": 1})
+    pending, _ = order(env, s)
+    tests = env.client.get("/v1/strategy-tests").json()["items"]
+    assert len(tests) == 1
+    assert tests[0]["test_id"] == tested["test_id"]
+    assert tests[0]["strategy_name"] == s["name"]
+    assert tests[0]["market_data"]["synthetic"] is False
+    queue = env.client.get("/v1/trading/queue").json()["items"]
+    assert [item["intent_id"] for item in queue] == [pending["intent_id"]]
+    with TestClient(env.app) as other:
+        other_account(other)
+        assert other.get("/v1/strategy-tests").json()["items"] == []
+        assert other.get("/v1/trading/queue").json()["items"] == []

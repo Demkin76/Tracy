@@ -1,5 +1,15 @@
 def migrate_strategies(conn):
     statements = [
+        """CREATE TABLE IF NOT EXISTS market_snapshots(
+        snapshot_id TEXT PRIMARY KEY,request_key TEXT NOT NULL UNIQUE,body TEXT NOT NULL,fetched_at INTEGER NOT NULL)""",
+        """CREATE TABLE IF NOT EXISTS deployment_market_data(
+        deployment_id TEXT PRIMARY KEY REFERENCES trading_deployments(deployment_id),
+        snapshot_id TEXT NOT NULL REFERENCES market_snapshots(snapshot_id))""",
+        """CREATE TABLE IF NOT EXISTS agent_plans(
+        plan_id TEXT PRIMARY KEY,owner_id TEXT NOT NULL REFERENCES users(user_id),
+        configuration TEXT NOT NULL,report TEXT NOT NULL,review_hash TEXT NOT NULL,
+        created_at INTEGER NOT NULL,agent_id TEXT REFERENCES agents(agent_id),
+        strategy_id TEXT REFERENCES strategies(strategy_id))""",
         """CREATE TABLE IF NOT EXISTS strategies(
         strategy_id TEXT PRIMARY KEY, owner_id TEXT NOT NULL REFERENCES users(user_id),
         agent_id TEXT NOT NULL REFERENCES agents(agent_id), name TEXT NOT NULL, description TEXT NOT NULL,
@@ -40,8 +50,11 @@ def migrate_strategies(conn):
     ]
     for sql in statements:
         conn.execute(sql)
-    for table in ("strategy_versions", "strategy_tests", "paper_fills", "trading_receipts", "trading_marks"):
+    conn.execute("""CREATE TRIGGER IF NOT EXISTS agent_plan_snapshot_immutable
+        BEFORE UPDATE OF configuration,report,review_hash,owner_id,created_at ON agent_plans
+        BEGIN SELECT RAISE(ABORT,'Tested plan is immutable'); END""")
+    for table in ("strategy_versions", "strategy_tests", "paper_fills", "trading_receipts", "trading_marks", "market_snapshots", "deployment_market_data"):
         for action in ("UPDATE", "DELETE"):
             conn.execute(f"""CREATE TRIGGER IF NOT EXISTS {table}_no_{action.lower()}
             BEFORE {action} ON {table} BEGIN SELECT RAISE(ABORT,'Trading evidence is append-only'); END""")
-    conn.execute("INSERT OR REPLACE INTO metadata VALUES('schema_version','6')")
+    conn.execute("INSERT OR REPLACE INTO metadata VALUES('schema_version','7')")

@@ -7,7 +7,6 @@ from pydantic import ValidationError
 
 from backend.crypto.hashing import canonical_bytes, digest
 from backend.crypto.signatures import private_key, sign
-from backend.market_data.service import SECONDS, candles
 from backend.performance.metrics import calculate
 from backend.trading.adapters import PaperAdapter, signal
 from backend.trading.models import Order
@@ -24,13 +23,12 @@ class TradingService:
         return valid_receipt(proof, self.s.receipts.public_key)
 
     def bars(self, strategy, deployment):
-        return candles(
-            strategy["market"],
-            strategy["timeframe"],
-            deployment["created_at"] - 96 * SECONDS[strategy["timeframe"]],
-            96,
-            "stress",
-        )
+        with self.db.connect() as conn:
+            row = conn.execute("SELECT snapshot_id FROM deployment_market_data WHERE deployment_id=?", (deployment["deployment_id"],)).fetchone()
+        if not row:
+            raise HTTPException(409, "This legacy demo has no recorded exchange data. Create and test a new version.")
+        snapshot = self.s.market_data.get(row[0])
+        return [{**bar, "snapshot_id": snapshot["snapshot_id"]} for bar in snapshot["bars"]]
 
     def ledger(self, conn, deployment):
         fills = [
@@ -525,7 +523,7 @@ class TradingService:
                             request,
                             order,
                             bars[step],
-                            "hosted_demo_runner",
+                            "hosted_paper_runner",
                             deployment["runner_public_key"],
                         )
                     )
@@ -586,7 +584,7 @@ class TradingService:
                 request,
                 order,
                 context,
-                "hosted_demo_runner",
+                "hosted_paper_runner",
                 deployment["runner_public_key"],
             )
         return self.get(iid, owner_id)
@@ -619,11 +617,24 @@ class TradingService:
                 )
                 previous = p["receipt_hash"]
             readback = PaperAdapter.verify(conn, proof["trade"])
+        context = proof["trade"]["market_context"]
+        snapshot_id = context.get("snapshot_id")
+        market_matches = None
+        market_source = None
+        if snapshot_id:
+            snapshot = self.s.market_data.get(snapshot_id)
+            bar = context.get("bar", -1)
+            market_matches = 0 <= bar < len(snapshot["bars"]) and snapshot["bars"][bar] == {
+                k: v for k, v in context.items() if k != "snapshot_id"
+            }
+            market_source = {k: v for k, v in snapshot.items() if k != "bars"}
         return {
             "receipt": proof,
             "chain": chain,
+            "market_data": market_source,
             "checks": {
-                "valid": bool(valid and readback),
+                "valid": bool(valid and readback and market_matches is not False),
+                "market_data_matches": market_matches,
                 "signature_valid": self.crypto_valid(proof),
                 "chain_valid": bool(valid),
                 "readback_matches": readback,

@@ -9,11 +9,13 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from backend.actions.models import ActionRequest
 from backend.actions.service import ActionService
 from backend.agents.models import AgentProfile, AgentStatus, RegisterAgent, UpdatePolicy
 from backend.agents.service import AgentService
+from backend.assistance.service import assistance_router
 from backend.auth.models import CreateApiKey, Login, Signup
 from backend.auth.service import AuthService
 from backend.blockchain.solana import SolanaGateway
@@ -29,6 +31,7 @@ from backend.platform.runtime import Reconciler, SingleWorkerLock
 from backend.receipts.models import VerificationResult
 from backend.receipts.service import ReceiptService
 from backend.receipts.verifier import ReceiptVerifier
+from backend.strategies.plans import plan_router
 from backend.strategies.routes import strategy_router
 from backend.strategies.service import StrategyService
 
@@ -56,7 +59,7 @@ def create_app(settings: Settings | None = None, gateway=None):
 
     @asynccontextmanager
     async def lifespan(app):
-        if settings.reconciler_enabled:
+        if settings.reconciler_enabled or settings.environment == "production":
             runtime_lock.acquire()
         try:
             actions.recover_unsubmitted()
@@ -75,7 +78,10 @@ def create_app(settings: Settings | None = None, gateway=None):
             await gateway.close()
             runtime_lock.release()
 
-    app = FastAPI(title="Tracy", version="3.0.0", lifespan=lifespan)
+    app = FastAPI(title="Tracy", version="3.1.0", lifespan=lifespan,
+                  docs_url="/docs",
+                  redoc_url=None)
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts)
     app.state.db, app.state.actions, app.state.auth = db, actions, auth
     app.state.runtime = runtime
     app.state.marketplace = marketplace
@@ -97,6 +103,14 @@ def create_app(settings: Settings | None = None, gateway=None):
             return JSONResponse(status_code=400, content={"detail": "Invalid Content-Length"})
         if length > 262144:
             return JSONResponse(status_code=413, content={"detail": "Request body exceeds 256 KiB"})
+        if request.method not in ("GET", "HEAD", "OPTIONS"):
+            chunks, size = [], 0
+            async for chunk in request.stream():
+                size += len(chunk)
+                if size > 262144:
+                    return JSONResponse(status_code=413, content={"detail": "Request body exceeds 256 KiB"})
+                chunks.append(chunk)
+            request._body = b"".join(chunks)
         if request.method not in ("GET", "HEAD", "OPTIONS"):
             origin = request.headers.get("origin")
             same_origin = str(request.base_url).rstrip("/")
@@ -138,6 +152,8 @@ def create_app(settings: Settings | None = None, gateway=None):
 
     @app.post("/v1/auth/signup", status_code=201)
     def signup(payload: Signup, request: Request, response: Response):
+        if not settings.signup_enabled:
+            raise HTTPException(403, "Registration is closed. Ask the operator for an account.")
         auth.throttle("signup:" + (request.client.host if request.client else "unknown"), 30)
         return session_response(auth.register(payload), response)
 
@@ -187,7 +203,10 @@ def create_app(settings: Settings | None = None, gateway=None):
     def config():
         return {
             "product": "Tracy",
-            "version": "3.0.0",
+            "version": "3.1.0",
+            "market_data_provider": "Binance Spot",
+            "trading_mode": "historical_paper_replay",
+            "signup_enabled": settings.signup_enabled,
             "network": "solana-devnet",
             "execution_wallet": gateway.sender,
             "poa_public_key": receipts.public_key,
@@ -318,12 +337,21 @@ def create_app(settings: Settings | None = None, gateway=None):
     app.include_router(marketplace_router(marketplace, owner))
     app.include_router(control_router(control, owner))
     app.include_router(strategy_router(strategies, owner))
+    app.include_router(plan_router(strategies, owner))
+    app.include_router(assistance_router(strategies, auth, owner))
 
     @app.get("/healthz", include_in_schema=False)
     def healthz():
         with db.connect() as conn:
             conn.execute("SELECT 1")
         return {"status": "ok", "product": "Tracy"}
+
+    @app.get("/readyz", include_in_schema=False)
+    def readyz():
+        with db.connect() as conn:
+            conn.execute("SELECT 1 FROM market_snapshots LIMIT 1")
+        built = (Path(__file__).resolve().parents[1] / "frontend/dist/index.html").is_file()
+        return JSONResponse(status_code=200 if built else 503, content={"ready": built, "database": "ok", "frontend": built, "mode": "historical_paper_replay"})
 
     dist = Path(__file__).resolve().parents[1] / "frontend" / "dist"
     if (dist / "assets").is_dir():

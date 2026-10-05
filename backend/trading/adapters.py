@@ -103,5 +103,6 @@ def run_backtest(version, bars):
         "market_context": bars,
         "result": "COMPLETED",
         "mode": "backtest",
-        "source": "deterministic_synthetic_runner",
+        "source": "historical_exchange_backtest",
+        "execution_assumptions": "Signals use prior closes; simulated fills use current close plus configured slippage and fees. No intrabar liquidity or order-book model.",
     }
