@@ -74,6 +74,8 @@ class Reconciler:
                         (now + 60, action_id),
                     )
                 logger.exception("Reconciliation failed for %s", action_id)
+        if getattr(self, "trading", None):
+            await self.trading.tick()
         if getattr(self, "control", None):
             await self.control.tick()
         if getattr(self, "marketplace", None):

@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "proof-of-action"
-version = "2.0.0"
-description = "Tracy: policy enforcement, controlled execution and verifiable receipts for AI agents"
+version = "3.0.0"
+description = "Tracy: exchange and lifecycle infrastructure for AI trading agents"
 requires-python = ">=3.12"
 dependencies = [
   "fastapi>=0.115,<1", "uvicorn[standard]>=0.34,<1",

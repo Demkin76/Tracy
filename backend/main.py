@@ -29,6 +29,8 @@ from backend.platform.runtime import Reconciler, SingleWorkerLock
 from backend.receipts.models import VerificationResult
 from backend.receipts.service import ReceiptService
 from backend.receipts.verifier import ReceiptVerifier
+from backend.strategies.routes import strategy_router
+from backend.strategies.service import StrategyService
 
 
 def create_app(settings: Settings | None = None, gateway=None):
@@ -46,6 +48,9 @@ def create_app(settings: Settings | None = None, gateway=None):
     runtime.marketplace = marketplace
     control = ControlService(db, agents, actions, receipts, settings)
     runtime.control = control
+    strategies = StrategyService(db, agents, control, receipts, settings)
+    control.trading = strategies.trading
+    runtime.trading = strategies.trading
     runtime_lock = SingleWorkerLock(settings.database_path)
     inflight = set()
 
@@ -70,11 +75,12 @@ def create_app(settings: Settings | None = None, gateway=None):
             await gateway.close()
             runtime_lock.release()
 
-    app = FastAPI(title="Tracy", version="2.0.0", lifespan=lifespan)
+    app = FastAPI(title="Tracy", version="3.0.0", lifespan=lifespan)
     app.state.db, app.state.actions, app.state.auth = db, actions, auth
     app.state.runtime = runtime
     app.state.marketplace = marketplace
     app.state.control = control
+    app.state.strategies = strategies
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
@@ -181,7 +187,7 @@ def create_app(settings: Settings | None = None, gateway=None):
     def config():
         return {
             "product": "Tracy",
-            "version": "2.0.0",
+            "version": "3.0.0",
             "network": "solana-devnet",
             "execution_wallet": gateway.sender,
             "poa_public_key": receipts.public_key,
@@ -311,6 +317,7 @@ def create_app(settings: Settings | None = None, gateway=None):
 
     app.include_router(marketplace_router(marketplace, owner))
     app.include_router(control_router(control, owner))
+    app.include_router(strategy_router(strategies, owner))
 
     @app.get("/healthz", include_in_schema=False)
     def healthz():

@@ -67,6 +67,8 @@ def control_router(control, owner):
 
     @router.post("/intents", status_code=202)
     def submit(payload: Intent):
+        if payload.action == "trading.order":
+            return control.trading.submit(payload)
         return control.submit(payload)
 
     @router.post("/intents/lookup")
@@ -74,6 +76,8 @@ def control_router(control, owner):
         control.authenticate_agent(
             payload.agent_id, payload.timestamp, payload.signature, payload.model_dump(exclude={"signature"})
         )
+        if payload.intent_id.startswith("tintent_"):
+            return control.trading.get(payload.intent_id, agent_id=payload.agent_id)
         return control.get(payload.intent_id, agent_id=payload.agent_id)
 
     @router.get("/intents")

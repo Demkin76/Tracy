@@ -41,7 +41,7 @@ def test_mcp_handshake_tools_and_no_approval_capability():
     assert "error" in call("tools/list")
     assert call("initialize")["result"]["protocolVersion"] == "2025-11-25"
     assert mcp.handle({"jsonrpc": "2.0", "method": "notifications/initialized"}) is None
-    assert {t["name"] for t in call("tools/list")["result"]["tools"]} == {"tracy_intent", "tracy_status"}
+    assert {t["name"] for t in call("tools/list")["result"]["tools"]} == {"tracy_intent", "tracy_status", "tracy_market_context"}
     result = call(
         "tools/call",
         {

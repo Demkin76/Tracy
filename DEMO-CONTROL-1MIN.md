@@ -1,3 +1,5 @@
+> Tracy v3 is the current strategy lifecycle MVP. See [TRACY-V3.md](TRACY-V3.md) and [DEMO-V3-90SEC.md](DEMO-V3-90SEC.md). The guide below describes the preserved earlier workflow.
+
 # Tracy: минутная демо control layer
 
 Подготовка: .\Start-ControlDemo.ps1 -SkipBuild -NewScenario. Открыть /control, войти через data/tracy-owner.json. Не показывать пароль или ключи на записи.

@@ -1,3 +1,4 @@
+import { BrandMark } from "./BrandMark";
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
@@ -83,9 +84,7 @@ export function AuthScreen({ onLogin }: { onLogin: (user: User) => void }) {
     <div className="auth-shell">
       <section className="auth-story">
         <Link to="/" className="brand">
-          <span className="brand-mark">
-            <Check size={24} />
-          </span>
+          <BrandMark />
           tracy<span className="brand-dot">.</span>
         </Link>
         <div>

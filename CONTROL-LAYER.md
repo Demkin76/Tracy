@@ -1,3 +1,5 @@
+> Tracy v3 is the current strategy lifecycle MVP. See [TRACY-V3.md](TRACY-V3.md) and [DEMO-V3-90SEC.md](DEMO-V3-90SEC.md). The guide below describes the preserved earlier workflow.
+
 # Tracy 2.0 — control layer для AI-агентов
 
 Tracy принимает подписанное намерение агента, проверяет выданную владельцем задачу и policy, исполняет разрешённое действие через серверный адаптер, отдельно читает результат и выпускает подписанное доказательство. Главный экран — /control. Каталог и старые Devnet-рецепты сохранены как дополнительные функции.

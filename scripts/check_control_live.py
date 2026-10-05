@@ -93,7 +93,7 @@ def main():
     )
     responses = [json.loads(line) for line in process.stdout.splitlines()]
     assert len(responses) == 3 and responses[0]["result"]["protocolVersion"] == "2025-11-25"
-    assert {tool["name"] for tool in responses[1]["result"]["tools"]} == {"tracy_intent", "tracy_status"}
+    assert {tool["name"] for tool in responses[1]["result"]["tools"]} == {"tracy_intent", "tracy_status", "tracy_market_context"}
     assert not responses[2]["result"]["isError"]
     assert json.loads(responses[2]["result"]["content"][0]["text"])["intent_id"] == target
     old = Path("data/backups/before-control-layer-20260927.sqlite3")

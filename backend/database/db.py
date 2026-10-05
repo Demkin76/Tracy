@@ -9,6 +9,7 @@ from backend.database.migrations import migrate
 from backend.database.models import SCHEMA
 from backend.marketplace.migrations import migrate_marketplace
 from backend.platform.migrations import migrate_platform
+from backend.strategies.migrations import migrate_strategies
 
 
 class Database:
@@ -41,6 +42,7 @@ class Database:
             migrate_platform(conn)
             migrate_marketplace(conn)
             migrate_control(conn)
+            migrate_strategies(conn)
             for key, value in {
                 "poa_public_key": signing_public_key,
                 "execution_wallet": execution_wallet,

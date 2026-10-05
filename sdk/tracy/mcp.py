@@ -9,6 +9,16 @@ from sdk.tracy import AgentIdentity, Tracy
 VERSION = "2025-11-25"
 TOOLS = [
     {
+        "name": "tracy_market_context",
+        "description": "Read the current synthetic paper quote for an owner-granted strategy deployment.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"strategy_id": {"type": "string"}},
+            "required": ["strategy_id"],
+            "additionalProperties": False,
+        },
+    },
+    {
         "name": "tracy_intent",
         "description": "Request a sensitive action under the owner's granted task. May require human approval; never bypass Tracy.",
         "inputSchema": {
@@ -61,7 +71,7 @@ class MCPServer:
             result = {
                 "protocolVersion": VERSION,
                 "capabilities": {"tools": {}},
-                "serverInfo": {"name": "tracy-control", "version": "2.0.0"},
+                "serverInfo": {"name": "tracy-control", "version": "3.0.0"},
             }
         elif method == "ping":
             result = {}
@@ -90,6 +100,8 @@ class MCPServer:
                     }:
                         return error(-32602, "Invalid intent arguments")
                     value = self.agent.intent(**args)
+                elif name == "tracy_market_context" and set(args) == {"strategy_id"}:
+                    value = self.agent.quote(args["strategy_id"])
                 elif name == "tracy_status" and set(args) == {"intent_id"}:
                     value = self.agent.status(args["intent_id"])
                 else:

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="200 240 624 624" width="624" height="624">
+  <title>Tracy Logo</title>
+  <rect x="200" y="240" width="624" height="624" rx="100" fill="#ffffff"/>
+  <g fill="#000000">
+    <rect x="250" y="282" width="524" height="104"/>
+    <path d="M438 505 L566 395 L566 710 L438 840 Z"/>
+  </g>
+</svg>

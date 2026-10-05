@@ -68,6 +68,21 @@ class ProtectedAgent:
         }
         return self.tracy._post("/v2/intents", self._signed(body))
 
+    def quote(self, strategy_id):
+        """Read the current paper market context using only the agent's signing key."""
+        return self.tracy._post(
+            "/v1/trading/quote",
+            self._signed(
+                {
+                    "domain": "tracy.quote/3",
+                    "agent_id": self.identity.agent_id,
+                    "strategy_id": strategy_id,
+                    "task_id": self.task_id,
+                    "timestamp": int(time.time()),
+                }
+            ),
+        )
+
     def status(self, intent_id):
         return self.tracy._post(
             "/v2/intents/lookup",

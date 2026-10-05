@@ -1,3 +1,4 @@
+import { BrandMark } from "./BrandMark";
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
@@ -47,7 +48,29 @@ import {
 } from "./api";
 import "./styles.css";
 import "./platform.css";
-import { ControlHome, ControlAgent, IntentPage, ControlResources, ControlIntegrations } from "./ControlPages";
+import "./lifecycle.css";
+import {
+  LifecycleOverview,
+  StrategyCreatePage,
+  StrategyDetail,
+  DegradationPage,
+  TradingIntentPage,
+  TradingProofPage,
+  InfrastructurePage,
+  StrategyTestsPage,
+  TradingProofIndex,
+  TradingExchange,
+  TradingMethodology,
+  TradingPublicAgent,
+  TradingCompare,
+} from "./LifecyclePages";
+import {
+  ControlHome,
+  ControlAgent,
+  IntentPage,
+  ControlResources,
+  ControlIntegrations,
+} from "./ControlPages";
 import {
   GettingStarted,
   InstalledAgents,
@@ -192,6 +215,8 @@ function Workspace() {
     ["/explore", "/compare", "/methodology", "/recover"].includes(
       location.pathname,
     ) ||
+    location.pathname.startsWith("/exchange/") ||
+    location.pathname.startsWith("/legacy/") ||
     location.pathname.startsWith("/a/") ||
     location.pathname.startsWith("/proof/") ||
     location.pathname.startsWith("/public/receipts/");
@@ -199,12 +224,24 @@ function Workspace() {
     return (
       <PublicShell>
         <Routes>
-          <Route path="/explore" element={<Explore />} />
-          <Route path="/a/:id" element={<PublicProfile />} />
-          <Route path="/compare" element={<Compare />} />
+          <Route path="/explore" element={<TradingExchange />} />
+          <Route
+            path="/exchange/strategies/:id"
+            element={<StrategyDetail publicView />}
+          />
+          <Route
+            path="/exchange/proofs/:id"
+            element={<TradingProofPage publicView />}
+          />
+          <Route path="/legacy/explore" element={<Explore />} />
+          <Route path="/legacy/agents/:id" element={<PublicProfile />} />
+          <Route path="/legacy/compare" element={<Compare />} />
+          <Route path="/a/:id" element={<TradingPublicAgent />} />
+          <Route path="/compare" element={<TradingCompare />} />
           <Route path="/public/receipts/:id" element={<PublicProof />} />
           <Route path="/proof/:id" element={<PublicProof shared />} />
-          <Route path="/methodology" element={<Methodology />} />
+          <Route path="/methodology" element={<TradingMethodology />} />
+          <Route path="/legacy/methodology" element={<Methodology />} />
           <Route path="/recover" element={<RecoveryPage />} />
         </Routes>
       </PublicShell>
@@ -240,9 +277,7 @@ function Workspace() {
       <div className="shell">
         <aside className="sidebar">
           <Link className="brand" to="/">
-            <div className="brand-mark">
-              <CheckCheck size={23} />
-            </div>
+            <BrandMark />
             <span>
               tracy<span className="brand-dot">.</span>
             </span>
@@ -260,47 +295,37 @@ function Workspace() {
           <div className="nav-label">WORKSPACE</div>
           <nav>
             <NavLink to="/" end>
-              <LayoutDashboard size={18} /> Control center
+              <LayoutDashboard size={18} /> Overview
             </NavLink>
-            <NavLink to="/control/approvals"><ShieldCheck size={18} /> Human approvals</NavLink>
-            <NavLink to="/control/resources"><Wallet size={18} /> Execution resources</NavLink>
-            <NavLink to="/control/integrations"><Terminal size={18} /> Integrations</NavLink>
-            <NavLink to="/overview"><Activity size={18} /> Payout overview</NavLink>
-            <NavLink to="/installed">
-              <Play size={18} /> Installed agents
+            <NavLink to="/strategies">
+              <Bot size={18} /> Strategies
             </NavLink>
             <NavLink to="/agents">
-              <Bot size={18} /> My agents
+              <Fingerprint size={18} /> Agents
             </NavLink>
-            <NavLink to="/demo">
-              <Play size={18} /> Run an action
+            <NavLink to="/tests">
+              <Play size={18} /> Tests
             </NavLink>
-            <NavLink to="/connect">
-              <Terminal size={18} /> Connect SDK
+            <NavLink to="/monitoring">
+              <Activity size={18} /> Live monitoring
             </NavLink>
-            <NavLink to="/activity">
-              <Activity size={18} /> Activity
+            <NavLink to="/performance">
+              <BarChart3 size={18} /> Performance
             </NavLink>
-            <NavLink to="/analytics">
-              <BarChart3 size={18} /> Analytics
-            </NavLink>
-            <NavLink to="/watchlist">
-              <Star size={18} /> Watchlist
-            </NavLink>
-            <NavLink to="/notifications">
-              <Bell size={18} /> Notifications
-            </NavLink>
-            <NavLink to="/funding">
-              <Wallet size={18} /> Devnet funding
-            </NavLink>
-            <NavLink to="/security">
-              <Settings size={18} /> Account & security
+            <NavLink to="/degradation">
+              <Bell size={18} /> Degradation alerts
             </NavLink>
             <NavLink to="/explore">
-              <Globe size={18} /> Explore agents
+              <Globe size={18} /> Marketplace
             </NavLink>
-            <NavLink to="/verify">
-              <ShieldCheck size={18} /> Verify a receipt
+            <NavLink to="/infrastructure">
+              <ShieldCheck size={18} /> Guardrails / Infrastructure
+            </NavLink>
+            <NavLink to="/proofs">
+              <CheckCheck size={18} /> Proofs
+            </NavLink>
+            <NavLink to="/security">
+              <Settings size={18} /> Settings
             </NavLink>
           </nav>
           <div className="sidebar-bottom">
@@ -326,7 +351,7 @@ function Workspace() {
               Workspace <ChevronRight size={13} /> Tracy
             </span>
             <div>
-              <span className="dot" /> Devnet only{" "}
+              <span className="dot" /> Paper trading / Devnet{" "}
               <span className="avatar">
                 {user.name.slice(0, 2).toUpperCase()}
               </span>
@@ -340,14 +365,44 @@ function Workspace() {
               </button>
             )}
             <Routes>
-              <Route path="/" element={<ControlHome />} />
+              <Route path="/" element={<LifecycleOverview />} />
+              <Route
+                path="/strategies"
+                element={<LifecycleOverview mode="Strategies" />}
+              />
+              <Route path="/strategies/new" element={<StrategyCreatePage />} />
+              <Route path="/strategies/:id" element={<StrategyDetail />} />
+              <Route path="/tests" element={<StrategyTestsPage />} />
+              <Route
+                path="/monitoring"
+                element={<LifecycleOverview mode="Live monitoring" />}
+              />
+              <Route
+                path="/performance"
+                element={<LifecycleOverview mode="Performance" />}
+              />
+              <Route path="/degradation" element={<DegradationPage />} />
+              <Route path="/infrastructure" element={<InfrastructurePage />} />
+              <Route path="/proofs" element={<TradingProofIndex />} />
+              <Route
+                path="/trading/intents/:id"
+                element={<TradingIntentPage />}
+              />
+              <Route path="/trades/:id/proof" element={<TradingProofPage />} />
+              <Route path="/payouts" element={<Dashboard />} />
               <Route path="/control" element={<ControlHome />} />
-              <Route path="/control/approvals" element={<ControlHome approvals />} />
+              <Route
+                path="/control/approvals"
+                element={<ControlHome approvals />}
+              />
               <Route path="/control/agents/:id" element={<ControlAgent />} />
               <Route path="/control/intents/:id" element={<IntentPage />} />
               <Route path="/control/resources" element={<ControlResources />} />
-              <Route path="/control/integrations" element={<ControlIntegrations />} />
-              <Route path="/overview" element={<Dashboard />} />
+              <Route
+                path="/control/integrations"
+                element={<ControlIntegrations />}
+              />
+              <Route path="/overview" element={<LifecycleOverview />} />
               <Route path="/installed" element={<InstalledAgents />} />
               <Route path="/install/:id" element={<InstallAgent />} />
               <Route path="/installed/:id" element={<Installation />} />

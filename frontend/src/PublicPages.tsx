@@ -1,9 +1,9 @@
+import { BrandMark } from "./BrandMark";
 import React, { useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import {
   ArrowRight,
   Bot,
-  CheckCheck,
   ShieldCheck,
   Search,
   Star,
@@ -71,9 +71,7 @@ export function PublicShell({ children }: { children: React.ReactNode }) {
     <div className="public-shell">
       <header className="public-nav">
         <Link to="/explore" className="brand">
-          <span className="brand-mark">
-            <CheckCheck size={22} />
-          </span>
+          <BrandMark />
           tracy<span className="brand-dot">.</span>
         </Link>
         <nav>
@@ -88,7 +86,8 @@ export function PublicShell({ children }: { children: React.ReactNode }) {
       <footer className="public-footer">
         <span>Tracy / Proof of Action</span>
         <span>
-          Solana Devnet · Test funds · Records published by their owners
+          Paper trading · Solana Devnet infrastructure · Owner-published
+          evidence
         </span>
         <Link to="/methodology">Verification & methodology</Link>
       </footer>

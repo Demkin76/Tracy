@@ -1,3 +1,5 @@
+> Tracy v3 is the current strategy lifecycle MVP. See [TRACY-V3.md](TRACY-V3.md) and [DEMO-V3-90SEC.md](DEMO-V3-90SEC.md). The guide below describes the preserved earlier workflow.
+
 > Tracy 2.0: the main product is now the control layer. See [CONTROL-LAYER.md](CONTROL-LAYER.md) and [DEMO-CONTROL-1MIN.md](DEMO-CONTROL-1MIN.md). The guide below covers preserved v1 marketplace features.
 
 # Tracy 1.1 — каталог и запуск личных агентов

@@ -43,6 +43,26 @@ def validate(path):
                 ]
                 if not verify_events(events, key):
                     raise ValueError("Invalid control audit chain")
+        if "trading_receipts" in tables:
+            from backend.trading.verify import verify_chain
+
+            for (strategy_id,) in conn.execute("SELECT DISTINCT strategy_id FROM trading_receipts"):
+                chain = [
+                    json.loads(r[0])
+                    for r in conn.execute(
+                        "SELECT body FROM trading_receipts WHERE strategy_id=? ORDER BY sequence",
+                        (strategy_id,),
+                    )
+                ]
+                if not verify_chain(chain, key):
+                    raise ValueError("Invalid trading receipt chain")
+                for receipt in chain:
+                    fill = conn.execute(
+                        "SELECT body FROM paper_fills WHERE trade_id=?", (receipt["trade_id"],)
+                    ).fetchone()
+                    if not fill or json.loads(fill[0]) != receipt["trade"]:
+                        raise ValueError("Trading proof does not match the paper ledger")
+                count += len(chain)
         return count
 
 
