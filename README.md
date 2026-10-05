@@ -1,18 +1,4 @@
-# Tracy 3.0 — exchange & lifecycle infrastructure for AI trading agents
-
-Test → Prove → Deploy → Monitor → Detect degradation → Adapt.
-
-Versioned strategies, reproducible backtests, controlled paper execution, signed Trading Proofs, performance accounting, backtest/live gap, transparent Strategy Health, regime context, alerts and a risk-aware agent exchange.
-
-**Run:** `.\Start-TracyV3.ps1 -SkipBuild` (omit SkipBuild on a fresh checkout). Open http://127.0.0.1:8000/ or the exchange at http://127.0.0.1:8000/explore. Local login is in data/tracy-owner.json.
-
-- [Product and operator guide](TRACY-V3.md)
-- [60–90 second demo script](DEMO-V3-90SEC.md)
-- [Acceptance checks and scope](TRACY-V3-ACCEPTANCE.md)
-
-Current trading execution uses synthetic paper replay. Proofs explicitly report `on_chain: false`; no Jupiter/Solana swap fill is claimed. Native SOL Devnet execution and the complete v1/v2 infrastructure remain available under Guardrails / Infrastructure. Trading publication does not publish original action histories.
-
-## Preserved v2 control layer
+# Tracy 2.0 — AI agent control layer
 
 Tracy sits between an agent and sensitive actions: signed intent → task/policy check → optional human approval → controlled execution → independent readback → signed receipt.
 
