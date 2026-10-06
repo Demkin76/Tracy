@@ -1,0 +1,490 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Tracy single-worker paper MVP in eu-north-1; encrypted state and separate S3 backups",
+  "Resources": {
+    "Artifacts": {
+      "Type": "AWS::S3::Bucket",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "BucketName": "tracy-production-322758218105-eu-north-1",
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "RetainDailyBackups",
+              "Status": "Enabled",
+              "Prefix": "backups/",
+              "ExpirationInDays": 30,
+              "NoncurrentVersionExpiration": {
+                "NoncurrentDays": 30
+              }
+            },
+            {
+              "Id": "AbortIncompleteUploads",
+              "Status": "Enabled",
+              "AbortIncompleteMultipartUpload": {
+                "DaysAfterInitiation": 1
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Application",
+            "Value": "Tracy"
+          },
+          {
+            "Key": "Environment",
+            "Value": "production"
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          },
+          {
+            "Key": "Project",
+            "Value": "Tracy"
+          },
+          {
+            "Key": "WorkloadType",
+            "Value": "web-server"
+          },
+          {
+            "Key": "CreatedDate",
+            "Value": "2026-10-06"
+          },
+          {
+            "Key": "Owner",
+            "Value": "hzneznaju"
+          }
+        ]
+      }
+    },
+    "BucketTLS": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "Artifacts"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:*",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "Artifacts",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::Sub": "${Artifacts.Arn}/*"
+                }
+              ],
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false"
+                }
+              }
+            },
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "cloudtrail.amazonaws.com"
+              },
+              "Action": "s3:GetBucketAcl",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "Artifacts",
+                  "Arn"
+                ]
+              },
+              "Condition": {
+                "StringEquals": {
+                  "aws:SourceArn": {
+                    "Fn::Sub": "arn:${AWS::Partition}:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/tracy-production"
+                  }
+                }
+              }
+            },
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "cloudtrail.amazonaws.com"
+              },
+              "Action": "s3:PutObject",
+              "Resource": {
+                "Fn::Sub": "${Artifacts.Arn}/audit/AWSLogs/${AWS::AccountId}/*"
+              },
+              "Condition": {
+                "StringEquals": {
+                  "s3:x-amz-acl": "bucket-owner-full-control",
+                  "aws:SourceArn": {
+                    "Fn::Sub": "arn:${AWS::Partition}:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/tracy-production"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "Role": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ec2.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "TracyReleaseAndBackups",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "${Artifacts.Arn}/release/*"
+                    },
+                    {
+                      "Fn::Sub": "${Artifacts.Arn}/migration/*"
+                    },
+                    {
+                      "Fn::Sub": "${Artifacts.Arn}/backups/*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:PutObject"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "${Artifacts.Arn}/backups/*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ssm:GetParameter"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/tracy/production/config"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Application",
+            "Value": "Tracy"
+          },
+          {
+            "Key": "Environment",
+            "Value": "production"
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          },
+          {
+            "Key": "Project",
+            "Value": "Tracy"
+          },
+          {
+            "Key": "WorkloadType",
+            "Value": "web-server"
+          },
+          {
+            "Key": "CreatedDate",
+            "Value": "2026-10-06"
+          },
+          {
+            "Key": "Owner",
+            "Value": "hzneznaju"
+          }
+        ]
+      }
+    },
+    "Profile": {
+      "Type": "AWS::IAM::InstanceProfile",
+      "Properties": {
+        "Roles": [
+          {
+            "Ref": "Role"
+          }
+        ]
+      }
+    },
+    "WebSecurity": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Tracy HTTPS and certificate validation; management through SSM only",
+        "VpcId": "vpc-00f62c2806c5a1549",
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 80,
+            "ToPort": 80,
+            "CidrIp": "0.0.0.0/0"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "CidrIp": "0.0.0.0/0"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Application",
+            "Value": "Tracy"
+          },
+          {
+            "Key": "Environment",
+            "Value": "production"
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          },
+          {
+            "Key": "Project",
+            "Value": "Tracy"
+          },
+          {
+            "Key": "WorkloadType",
+            "Value": "web-server"
+          },
+          {
+            "Key": "CreatedDate",
+            "Value": "2026-10-06"
+          },
+          {
+            "Key": "Owner",
+            "Value": "hzneznaju"
+          }
+        ]
+      }
+    },
+    "Server": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "ImageId": "ami-0769f265f707fecc8",
+        "InstanceType": "t3.small",
+        "IamInstanceProfile": {
+          "Ref": "Profile"
+        },
+        "SubnetId": "subnet-0373004d630a4e771",
+        "SecurityGroupIds": [
+          {
+            "Ref": "WebSecurity"
+          }
+        ],
+        "MetadataOptions": {
+          "HttpTokens": "required",
+          "HttpEndpoint": "enabled",
+          "HttpPutResponseHopLimit": 1
+        },
+        "CreditSpecification": {
+          "CPUCredits": "standard"
+        },
+        "BlockDeviceMappings": [
+          {
+            "DeviceName": "/dev/sda1",
+            "Ebs": {
+              "VolumeSize": 20,
+              "VolumeType": "gp3",
+              "Encrypted": true,
+              "DeleteOnTermination": false
+            }
+          }
+        ],
+        "UserData": "IyEvYmluL2Jhc2gKc2V0IC1ldW8gcGlwZWZhaWwKZXhwb3J0IERFQklBTl9GUk9OVEVORD1ub25pbnRlcmFjdGl2ZQphcHQtZ2V0IHVwZGF0ZSAtcQphcHQtZ2V0IGluc3RhbGwgLXkgcHl0aG9uMy12ZW52IGN1cmwgdW56aXAgZ251cGcgY2FkZHkKY3VybCAtZnNTTCBodHRwczovL2F3c2NsaS5hbWF6b25hd3MuY29tL3YyL2luc3RhbGwuc2ggLW8gL3RtcC9pbnN0YWxsLWF3cy1jbGkuc2gKYmFzaCAvdG1wL2luc3RhbGwtYXdzLWNsaS5zaCAtLXN5c3RlbSAtLXF1aWV0CmlkIHRyYWN5ID4vZGV2L251bGwgMj4mMSB8fCB1c2VyYWRkIC0tc3lzdGVtIC0tY3JlYXRlLWhvbWUgLS1ob21lLWRpciAvb3B0L3RyYWN5IC0tc2hlbGwgL3Vzci9zYmluL25vbG9naW4gdHJhY3kKaW5zdGFsbCAtZCAtbSA3NTAgLW8gdHJhY3kgLWcgdHJhY3kgL29wdC90cmFjeS9kYXRhIC9vcHQvdHJhY3kvYmFja3VwcwpweXRob24zIC1tIHZlbnYgL29wdC90cmFjeS10b29scwovb3B0L3RyYWN5LXRvb2xzL2Jpbi9waXAgaW5zdGFsbCAtLWRpc2FibGUtcGlwLXZlcnNpb24tY2hlY2sgdXY9PTAuMTIuMjMKIyBObyBkZWZhdWx0L3B1YmxpYyBzaXRlIGJlZm9yZSB0aGUgcmV2aWV3ZWQgVHJhY3kgcmVsZWFzZSBpcyBpbnN0YWxsZWQuCnN5c3RlbWN0bCBzdG9wIGNhZGR5CnN5c3RlbWN0bCBkaXNhYmxlIGNhZGR5Cmluc3RhbGwgLWQgL3Zhci9saWIvdHJhY3kKcHJpbnRmICclc1xuJyByZWFkeSA+IC92YXIvbGliL3RyYWN5L2Jvb3RzdHJhcC1yZWFkeQo=",
+        "Tags": [
+          {
+            "Key": "Application",
+            "Value": "Tracy"
+          },
+          {
+            "Key": "Environment",
+            "Value": "production"
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          },
+          {
+            "Key": "Name",
+            "Value": "tracy-production"
+          },
+          {
+            "Key": "Project",
+            "Value": "Tracy"
+          },
+          {
+            "Key": "WorkloadType",
+            "Value": "web-server"
+          },
+          {
+            "Key": "CreatedDate",
+            "Value": "2026-10-06"
+          },
+          {
+            "Key": "Owner",
+            "Value": "hzneznaju"
+          }
+        ],
+        "DisableApiTermination": true,
+        "Monitoring": true
+      }
+    },
+    "Address": {
+      "Type": "AWS::EC2::EIP",
+      "Properties": {
+        "Domain": "vpc",
+        "Tags": [
+          {
+            "Key": "Application",
+            "Value": "Tracy"
+          },
+          {
+            "Key": "Environment",
+            "Value": "production"
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          },
+          {
+            "Key": "Project",
+            "Value": "Tracy"
+          },
+          {
+            "Key": "WorkloadType",
+            "Value": "web-server"
+          },
+          {
+            "Key": "CreatedDate",
+            "Value": "2026-10-06"
+          },
+          {
+            "Key": "Owner",
+            "Value": "hzneznaju"
+          }
+        ]
+      }
+    },
+    "AddressAssociation": {
+      "Type": "AWS::EC2::EIPAssociation",
+      "Properties": {
+        "InstanceId": {
+          "Ref": "Server"
+        },
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "Address",
+            "AllocationId"
+          ]
+        }
+      }
+    },
+    "AuditTrail": {
+      "Type": "AWS::CloudTrail::Trail",
+      "DependsOn": "BucketTLS",
+      "Properties": {
+        "TrailName": "tracy-production",
+        "S3BucketName": {
+          "Ref": "Artifacts"
+        },
+        "S3KeyPrefix": "audit",
+        "IsLogging": true,
+        "IsMultiRegionTrail": false,
+        "IncludeGlobalServiceEvents": true,
+        "EnableLogFileValidation": true
+      }
+    },
+    "StatusAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmDescription": "Tracy EC2 status checks fail",
+        "Namespace": "AWS/EC2",
+        "MetricName": "StatusCheckFailed",
+        "Statistic": "Maximum",
+        "Period": 60,
+        "EvaluationPeriods": 2,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": {
+              "Ref": "Server"
+            }
+          }
+        ],
+        "TreatMissingData": "missing"
+      }
+    }
+  },
+  "Outputs": {
+    "InstanceId": {
+      "Value": {
+        "Ref": "Server"
+      }
+    },
+    "PublicIp": {
+      "Value": {
+        "Ref": "Address"
+      }
+    },
+    "Bucket": {
+      "Value": {
+        "Ref": "Artifacts"
+      }
+    }
+  }
+}

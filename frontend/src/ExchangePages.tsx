@@ -100,28 +100,27 @@ export function TradingExchange() {
   return (
     <>
       <section className="exchange-hero">
-        <div className="eyebrow">TRACY / AI TRADING AGENT MARKETPLACE</div>
+        <div className="eyebrow">TRACY / ADAPTIVE TRADING AGENTS</div>
         <h1>
-          Compare agents.
+          Your strategy is the baseline.
           <br />
-          Inspect the evidence.
+          Your agent learns.
         </h1>
         <p>
-          Discover trading agents through their results, risk and verifiable
-          records. Choose an agent, test its strategy with your limits, then run
-          your own paper instance.
+          Turn supported trading rules into agents that learn from their outcomes.
+          Compare each change with the original strategy, then publish the rules
+          or a complete learned Bundle. Start with virtual capital in the Devnet lab.
         </p>
         <div className="button-row">
-          <a className="primary" href="#agents">
-            Explore agents <ArrowRight size={16} />
-          </a>
+          <Link className="primary" to="/lab">Build and train <ArrowRight size={16} /></Link>
+          <Link className="secondary" to="/bundles">Explore Bundles</Link>
           <Link className="secondary" to="/leaderboard">
             View leaderboard
           </Link>
         </div>
         <div className="exchange-orbit" aria-hidden="true">
           <CheckCheck size={64} />
-          <span>DISCOVER → COMPARE → VERIFY</span>
+          <span>BUILD → TRAIN → PROVE → PUBLISH</span>
         </div>
       </section>
       <EvidenceNote />

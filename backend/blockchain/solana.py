@@ -20,6 +20,23 @@ SYSTEM_PROGRAM = "11111111111111111111111111111111"
 MEMO_PROGRAM = "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"
 
 
+def inspect_memo(tx, signature, sender, bundle_hash):
+    try:
+        transaction, meta = tx["transaction"], tx["meta"]
+        message = transaction["message"]
+        instructions, keys = message["instructions"], message["accountKeys"]
+        valid = (transaction["signatures"] == [signature] and meta["err"] is None
+                 and not meta.get("innerInstructions") and len(instructions) == 1
+                 and instructions[0]["programId"] == MEMO_PROGRAM
+                 and instructions[0]["parsed"] == "tracy-bundle:" + bundle_hash
+                 and keys[0]["pubkey"] == sender and keys[0]["signer"]
+                 and sum(bool(k["signer"]) for k in keys) == 1)
+        return {"valid": bool(valid), "status": "CONFIRMED" if valid else "FAILED", "slot": tx["slot"],
+                "reason": "Exact bundle hash recorded in Solana Devnet memo" if valid else "Memo transaction mismatch"}
+    except (KeyError, TypeError, IndexError):
+        return {"valid": False, "status": "FAILED", "reason": "Malformed memo evidence"}
+
+
 class PreflightRejected(Exception):
     pass
 
@@ -100,8 +117,8 @@ class SolanaGateway:
     def __init__(self, settings: Settings):
         self.wallet = Keypair.from_seed(decode_base64(settings.execution_wallet_seed.get_secret_value(), 32))
         self.sender = str(self.wallet.pubkey())
-        self.submit_rpc = AsyncClient(settings.rpc_url, timeout=15, commitment="confirmed")
-        self.verify_rpc = AsyncClient(settings.verification_rpc_url, timeout=15, commitment="confirmed")
+        self.submit_rpc = AsyncClient(settings.rpc_url, timeout=10, commitment="confirmed", http2=False)
+        self.verify_rpc = AsyncClient(settings.verification_rpc_url, timeout=10, commitment="confirmed", http2=False)
 
     async def close(self):
         await self.submit_rpc.close()
@@ -139,6 +156,25 @@ class SolanaGateway:
             raise
         if str(response.value) != prepared.signature:
             raise RuntimeError("RPC returned an unexpected transaction signature")
+
+    async def prepare_memo(self, bundle_hash: str) -> PreparedTransfer:
+        if len(bundle_hash) != 64 or any(c not in "0123456789abcdef" for c in bundle_hash):
+            raise ValueError("Expected SHA-256 digest")
+        await self.ensure_devnet(self.submit_rpc)
+        await self.ensure_devnet(self.verify_rpc)
+        blockhash = (await self.submit_rpc.get_latest_blockhash()).value.blockhash
+        memo = Instruction(Pubkey.from_string(MEMO_PROGRAM), ("tracy-bundle:" + bundle_hash).encode("ascii"), [])
+        tx = Transaction.new_signed_with_payer([memo], self.wallet.pubkey(), [self.wallet], blockhash)
+        return PreparedTransfer(bytes(tx), str(tx.signatures[0]))
+
+    async def verify_memo(self, signature: str, bundle_hash: str):
+        await self.ensure_devnet(self.verify_rpc)
+        response = await self.verify_rpc.get_transaction(Signature.from_string(signature),
+            encoding="jsonParsed", commitment="confirmed", max_supported_transaction_version=0)
+        tx = json.loads(response.to_json())["result"]
+        if not tx:
+            return {"valid": False, "status": "PENDING", "reason": "Waiting for confirmed Devnet transaction"}
+        return inspect_memo(tx, signature, self.sender, bundle_hash)
 
     async def verify_transfer(
         self, signature: str, sender: str, recipient: str, lamports: int, request_hash: str

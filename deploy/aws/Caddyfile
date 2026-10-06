@@ -1,0 +1,7 @@
+aws-origin.tracys.online {
+    encode zstd gzip
+    request_body {
+        max_size 256KB
+    }
+    reverse_proxy 127.0.0.1:8108
+}

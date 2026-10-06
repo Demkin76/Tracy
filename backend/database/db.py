@@ -5,6 +5,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from backend.control.migrations import migrate_control
+from backend.adaptive.migrations import migrate_adaptive
 from backend.database.migrations import migrate
 from backend.database.models import SCHEMA
 from backend.marketplace.migrations import migrate_marketplace
@@ -43,6 +44,7 @@ class Database:
             migrate_marketplace(conn)
             migrate_control(conn)
             migrate_strategies(conn)
+            migrate_adaptive(conn)
             for key, value in {
                 "poa_public_key": signing_public_key,
                 "execution_wallet": execution_wallet,

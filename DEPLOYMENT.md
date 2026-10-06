@@ -1,6 +1,8 @@
 # Deploy the paper MVP
 
-This deployment serves recorded-market backtests and historical paper replay. It does not connect a funded exchange account, send exchange orders, provide live forward paper trading or host an LLM. Optional Copilot uses an operator-configured external AI API; see the README for configuration and data disclosure. Start with invited users and monitor resource usage: SQLite and one worker are intentional MVP limits.
+The current `tracys.online` deployment runs the website, API, database and paper worker on AWS EC2 in `eu-north-1`, behind the Cloudflare HTTPS edge. See [AWS deployment and recovery](deploy/aws/README.md). The former Daytona and Ubuntu staging installations were removed after migration. The Docker Compose instructions below describe an alternative installation.
+
+This deployment serves real-market backtests, historical paper replay and adaptive forward paper comparisons using live quotes and virtual funds. It does not connect a funded exchange account, send exchange orders or host an LLM. Optional Copilot uses an operator-configured external AI API; see the README for configuration and data disclosure. Start with invited users and monitor resource usage: SQLite and one worker are intentional MVP limits.
 
 ## Fresh HTTPS installation
 
@@ -34,7 +36,7 @@ curl --fail https://tracy.your-domain.com/readyz
 
 Readiness checks database access, migrations and built frontend assets; it deliberately does not claim that an external price provider is available. Log in through HTTPS, create a reviewed plan, check the displayed source/dates, deploy paper mode, advance the replay and verify its proofs. Check approvals, pause/stop and sign-out with a separate invited account. Confirm unknown hosts are rejected and the app port is not public. Set up external uptime monitoring, log retention and disk alerts on your hosting platform.
 
-Local evidence is recorded in [RELEASE-CHECKS.md](docs/RELEASE-CHECKS.md). Successful local tests do not establish that DNS, TLS or a container works on an untested host. No public deployment has been performed by this change.
+Local evidence is recorded in [RELEASE-CHECKS.md](docs/RELEASE-CHECKS.md). Successful local tests do not establish that DNS, TLS or a container works on an untested host. The AWS deployment and public-domain checks are documented in the linked AWS runbook.
 
 ## Back up and restore
 

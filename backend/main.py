@@ -12,6 +12,10 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from backend.actions.models import ActionRequest
+from backend.adaptive.service import AdaptiveService
+from backend.adaptive.forward import ForwardPaper
+from backend.adaptive.anchors import DevnetAnchors
+from backend.adaptive.routes import adaptive_router
 from backend.actions.service import ActionService
 from backend.agents.models import AgentProfile, AgentStatus, RegisterAgent, UpdatePolicy
 from backend.agents.service import AgentService
@@ -38,6 +42,10 @@ from backend.strategies.service import StrategyService
 
 def create_app(settings: Settings | None = None, gateway=None):
     settings = settings or Settings()
+    if settings.frontend_only:
+        from backend.static_app import create_static_app
+
+        return create_static_app(settings)
     db = Database(settings.database_path)
     gateway = gateway or SolanaGateway(settings)
     receipts = ReceiptService(db, private_key(settings.signing_seed.get_secret_value()))
@@ -52,6 +60,16 @@ def create_app(settings: Settings | None = None, gateway=None):
     control = ControlService(db, agents, actions, receipts, settings)
     runtime.control = control
     strategies = StrategyService(db, agents, control, receipts, settings)
+    adaptive = AdaptiveService(strategies)
+    strategies.adaptive = adaptive
+    forward = ForwardPaper(adaptive)
+    adaptive.forward = forward
+    anchors = DevnetAnchors(adaptive, gateway)
+    from backend.adaptive.payments import Payments
+    adaptive.payments = Payments(adaptive, gateway)
+    from backend.adaptive.dex import DevnetDex
+    adaptive.dex = DevnetDex(adaptive, gateway)
+    runtime.adaptive_forward = forward
     control.trading = strategies.trading
     runtime.trading = strategies.trading
     runtime_lock = SingleWorkerLock(settings.database_path)
@@ -87,6 +105,7 @@ def create_app(settings: Settings | None = None, gateway=None):
     app.state.marketplace = marketplace
     app.state.control = control
     app.state.strategies = strategies
+    app.state.adaptive, app.state.adaptive_forward = adaptive, forward
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
@@ -338,6 +357,7 @@ def create_app(settings: Settings | None = None, gateway=None):
     app.include_router(control_router(control, owner))
     app.include_router(strategy_router(strategies, owner))
     app.include_router(plan_router(strategies, owner))
+    app.include_router(adaptive_router(adaptive, forward, anchors, owner, auth))
     app.include_router(assistance_router(strategies, auth, owner))
 
     @app.get("/healthz", include_in_schema=False)

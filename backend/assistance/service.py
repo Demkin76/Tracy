@@ -261,6 +261,33 @@ class AssistantService:
 
     def context(self, page, user):
         url = urlsplit(page)
+        adaptive = getattr(self.s, "adaptive", None)
+        if adaptive and url.path.startswith(("/lab/", "/bundles/")):
+            parts = url.path.strip("/").split("/")
+            if parts[0] == "bundles" and len(parts) == 2:
+                bundle = adaptive.get_bundle(parts[1])
+                body = bundle["envelope"]["body"]
+                return {"scope": "Published Bundle only; paper outcomes, not real exchange trades",
+                        "name": body["name"], "strategy": body["strategy_apr"],
+                        "learning": body["agent_apr"], "gate": body["evidence"]["body"]["gate"], "anchor": bundle["anchor"]}
+            if user and parts[0] == "lab":
+                if len(parts) == 2 and parts[1] == 'dex':
+                    return {'scope':'Devnet DEX connectivity lab', 'enabled':self.s.settings.adaptive_devnet_dex_enabled,
+                            'network':'solana-devnet','execution':'User-signed Raydium CPMM swaps, no paper performance attribution'}
+                if len(parts) == 2:
+                    agent = adaptive.get(parts[1], user["user_id"])
+                    return {"scope": "Authenticated owner's adaptive instance only",
+                            "name": agent["name"], "strategy": agent["strategy_apr"], "state": agent["state"],
+                            "evolution": adaptive.learning.evolution(agent["agent_id"], user["user_id"]),
+                            "latest_gate": agent["runs"][0]["body"]["gate"] if agent["runs"] else None}
+                if len(parts) == 3 and parts[1] == "forward":
+                    run = adaptive.forward.get(parts[2], user["user_id"])
+                    return {"scope": "Authenticated forward paper experiment; virtual funds",
+                            **{k: run[k] for k in ("status", "started_at", "ends_at", "baseline_metrics", "agent_metrics", "last_error", "stop_reason") if k in run}}
+                if len(parts) == 3 and parts[1] == "bundles":
+                    bundle = adaptive.get_bundle(parts[2], user["user_id"])
+                    return {"scope": "Owner-visible frozen Bundle", "name": bundle["envelope"]["body"]["name"],
+                            "state": bundle["envelope"]["body"]["agent_apr"], "anchor": bundle["anchor"]}
         query = parse_qs(url.query)
         version = None
         if query.get("version"):

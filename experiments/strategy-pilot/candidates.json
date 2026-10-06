@@ -1,0 +1,35 @@
+[
+  {
+    "name": "BTC Momentum Pilot",
+    "goal": "Paper experiment: buy BTC after a six-hour rise exceeding 0.6%; exit after 12 bars or a six-hour decline exceeding 0.6%. No leverage or withdrawals.",
+    "market": "BTC/USDC",
+    "symbols": ["BTC", "USDC"],
+    "timeframe": "1h",
+    "starting_capital": 1000,
+    "risk_tolerance": "low",
+    "strategy_config": {"runner": "momentum", "lookback": 7, "exit_after_bars": 12, "threshold_bps": 60, "allocation_pct": 10, "fee_bps": 10, "slippage_bps": 10},
+    "guardrails": {"max_position_size": 150, "max_trade_size": 150, "max_daily_loss": 0.5, "max_drawdown": 1.5, "allowed_tokens": ["BTC", "USDC"], "allowed_markets": ["BTC/USDC"], "max_open_positions": 1, "human_approval_above": 150}
+  },
+  {
+    "name": "BTC Reversion Pilot",
+    "goal": "Paper experiment: buy BTC after a six-hour decline exceeding 0.8%; exit after 6 bars or a six-hour rise exceeding 0.8%. No averaging down, leverage or withdrawals.",
+    "market": "BTC/USDC",
+    "symbols": ["BTC", "USDC"],
+    "timeframe": "1h",
+    "starting_capital": 1000,
+    "risk_tolerance": "low",
+    "strategy_config": {"runner": "mean_reversion", "lookback": 7, "exit_after_bars": 6, "threshold_bps": 80, "allocation_pct": 10, "fee_bps": 10, "slippage_bps": 10},
+    "guardrails": {"max_position_size": 150, "max_trade_size": 150, "max_daily_loss": 0.5, "max_drawdown": 1.5, "allowed_tokens": ["BTC", "USDC"], "allowed_markets": ["BTC/USDC"], "max_open_positions": 1, "human_approval_above": 150}
+  },
+  {
+    "name": "BTC Hold Control",
+    "goal": "Paper control: buy BTC once after the same seven-bar warmup, using 10% of virtual capital, and hold until the recorded replay ends. No leverage or withdrawals.",
+    "market": "BTC/USDC",
+    "symbols": ["BTC", "USDC"],
+    "timeframe": "1h",
+    "starting_capital": 1000,
+    "risk_tolerance": "low",
+    "strategy_config": {"runner": "buy_hold", "lookback": 7, "exit_after_bars": 12, "threshold_bps": 0, "allocation_pct": 10, "fee_bps": 10, "slippage_bps": 10},
+    "guardrails": {"max_position_size": 150, "max_trade_size": 150, "max_daily_loss": 0.5, "max_drawdown": 1.5, "allowed_tokens": ["BTC", "USDC"], "allowed_markets": ["BTC/USDC"], "max_open_positions": 1, "human_approval_above": 150}
+  }
+]

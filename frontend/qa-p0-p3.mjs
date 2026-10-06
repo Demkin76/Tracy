@@ -1,0 +1,37 @@
+import {chromium,expect} from '@playwright/test';
+import fs from 'node:fs/promises';
+const base='http://127.0.0.1:8002';
+const browser=await chromium.launch({headless:true});
+const context=await browser.newContext({viewport:{width:1440,height:1000}});
+const page=await context.newPage();const failures=[];page.on('pageerror',e=>failures.push(e.message));
+try{
+ const account={email:`acceptance-${Date.now()}@example.invalid`,name:'P0-P3 acceptance',password:crypto.randomUUID()+crypto.randomUUID()};
+ const signup=await context.request.post(base+'/v1/auth/signup',{data:account});expect(signup.ok(),await signup.text()).toBeTruthy();
+ await page.goto(base+'/lab');
+ await page.getByLabel('Name',{exact:true}).fill('APR v2 acceptance');
+ await expect(page.getByLabel('Evaluation horizon (complete bars)')).toHaveValue('4');
+ await page.getByRole('checkbox',{name:/I reviewed these rules/}).check();
+ await page.getByRole('button',{name:'Create learning instance',exact:true}).click();await page.waitForURL(/\/lab\/adaptive_/);
+ const agentUrl=page.url();
+ const response=page.waitForResponse(r=>r.url().endsWith('/experiments')&&r.request().method()==='POST',{timeout:90000});
+ await page.getByRole('button',{name:'Run historical experiment',exact:true}).click();
+ const r=await response;expect(r.ok(),await r.text()).toBeTruthy();
+ await expect(page.getByRole('heading',{name:'Why did this agent change?'})).toBeVisible();
+ await page.getByRole('button',{name:'Freeze this revision',exact:true}).click();await page.waitForURL(/\/lab\/bundles\/bundle_/);
+ const bundleUrl=page.url();
+ await page.getByRole('checkbox',{name:'I reviewed the public disclosure.'}).check();
+ await page.getByRole('button',{name:'Publish to Bundle marketplace',exact:true}).click();
+ await page.getByRole('link',{name:'View public listing →'}).click();await page.waitForURL(/\/bundles\/bundle_/);
+ await expect(page.getByRole('heading',{name:'Bundle intelligence'})).toBeVisible();
+ await page.getByRole('button',{name:'Create two independent clones and compare'}).click();await page.waitForURL(/\/lab\/compare\?/);
+ await expect(page.getByRole('heading',{name:'Why did this agent change?'})).toHaveCount(2);
+ const compareUrl=page.url();await page.screenshot({path:'../data/p0-p3-validation/comparison-desktop.png',fullPage:true});
+ await page.setViewportSize({width:390,height:844});await page.screenshot({path:'../data/p0-p3-validation/comparison-mobile.png',fullPage:true});
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1)).toBeTruthy();
+ await page.goto(base+'/bundles');await expect(page.getByRole('heading',{name:'Strategies and learned agents'})).toBeVisible();
+ await page.getByRole('link',{name:'P0-P3 acceptance',exact:true}).click();await page.waitForURL(/\/creators\//);
+ await expect(page.getByRole('heading',{name:'P0-P3 acceptance'})).toBeVisible();
+ await page.goto(base+'/lab/dex');await expect(page.getByRole('heading',{name:'Test DEX execution'})).toBeVisible();
+ await expect(page.getByRole('button',{name:'Connect wallet and obtain quote'})).toBeEnabled();
+ expect(failures).toEqual([]);const result={agentUrl,bundleUrl,compareUrl,pageErrors:failures,checkedAt:new Date().toISOString()};await fs.writeFile('../data/p0-p3-validation/ui-acceptance.json',JSON.stringify(result,null,2));console.log(JSON.stringify(result));
+}finally{await browser.close()}

@@ -598,6 +598,7 @@ export function DeveloperStudio() {
       <div className="market-paths">
         <section className="panel editor">
           <h2>Guardrails → evaluate → publish → improve</h2>
+          <p><Link to="/lab">Open Adaptive lab →</Link> Preserve a strategy baseline, learn bounded entry rules, compare on unseen data and freeze a Bundle.</p>
           <p>
             Describe your strategy, review guardrails and run historical tests.
             Create a private paper runner, record its executions, then publish

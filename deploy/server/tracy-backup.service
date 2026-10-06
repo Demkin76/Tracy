@@ -1,0 +1,9 @@
+[Unit]
+Description=Tracy daily consistent database backup
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/tracy-backend
+ExecStart=%h/tracy-backend/.venv/bin/python -m deploy.server.backup
+UMask=0077
+NoNewPrivileges=true

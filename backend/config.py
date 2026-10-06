@@ -17,9 +17,14 @@ class Settings(BaseSettings):
 
     admin_token: SecretStr | None = None  # Legacy configuration only; never accepted for authentication.
     environment: Literal["development", "production"] = "development"
+    frontend_only: bool = False
+    origin_proxy_token: SecretStr | None = None
     allowed_hosts: list[str] = ["localhost", "127.0.0.1", "testserver"]
     signup_enabled: bool = True
     devnet_enabled: bool = True
+    adaptive_devnet_anchors_enabled: bool = False
+    adaptive_devnet_payments_enabled: bool = False
+    adaptive_devnet_dex_enabled: bool = False
     signing_seed: SecretStr
     execution_wallet_seed: SecretStr
     control_credentials_path: Path = Path("data/control-credentials.json")

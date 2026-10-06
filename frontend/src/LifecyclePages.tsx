@@ -1228,6 +1228,7 @@ export function StrategyDetail({
       >
         <div className="button-row">
           <Status value={dep?.step === 96 ? "COMPLETED" : s.status} />
+          {s.strategy_config.runner !== "buy_hold" && <Link className="secondary" to={"/lab?strategy=" + s.strategy_id + "&version=" + s.version}>Learn from this strategy</Link>}
           {!publicView && (
             <button
               className="primary"

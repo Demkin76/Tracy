@@ -30,6 +30,8 @@ export type CopilotResult = {
   } | null;
 };
 export function helpTopic(path: string, search = "") {
+  if (path.startsWith("/bundles") || path.startsWith("/lab/bundles/")) return "bundles";
+  if (path.startsWith("/lab")) return "adaptive";
   if (path.startsWith("/help/")) return path.split("/")[2];
   if (path.endsWith("/new")) return "intent";
   if (path.startsWith("/strategies/"))

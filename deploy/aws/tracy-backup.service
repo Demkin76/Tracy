@@ -1,0 +1,10 @@
+[Unit]
+Description=Tracy validated off-server S3 database backup
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/tracy
+ExecStart=/opt/tracy/.venv/bin/python -m deploy.aws.backup
+UMask=0077
+NoNewPrivileges=true

@@ -1,3 +1,4 @@
+from backend.execution_control import execution_allowed
 import json
 import time
 from uuid import uuid4
@@ -52,7 +53,7 @@ class TradingService:
             "SELECT active,status_version FROM agents WHERE agent_id=?", (strategy["agent_id"],)
         ).fetchone()
         reason = None
-        if not self.s.settings.execution_enabled:
+        if not execution_allowed(self.s.settings):
             reason = "platform_execution_disabled"
         elif not agent["active"]:
             reason = "agent_stopped"

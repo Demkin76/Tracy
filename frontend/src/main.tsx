@@ -1,4 +1,16 @@
+import { DevnetDexPage } from "./DevnetWallet";
+import {
+  UnifiedMarketplace,
+  CreatorPage,
+  CloneComparison,
+} from "./AdaptiveProduct";
 import { TradingExchange, TradingLeaderboard } from "./ExchangePages";
+import {
+  AdaptiveLab,
+  AdaptiveAgentPage,
+  BundlePage,
+  ForwardPage,
+} from "./AdaptivePages";
 import { Copilot, HelpCenter } from "./Copilot";
 import { BrandMark } from "./BrandMark";
 import {
@@ -233,8 +245,11 @@ function Workspace() {
       "/methodology",
       "/recover",
       "/help",
+      "/bundles",
     ].includes(location.pathname) ||
     location.pathname.startsWith("/help/") ||
+    location.pathname.startsWith("/creators/") ||
+    location.pathname.startsWith("/bundles/") ||
     location.pathname.startsWith("/exchange/") ||
     location.pathname.startsWith("/legacy/") ||
     location.pathname.startsWith("/a/") ||
@@ -248,6 +263,9 @@ function Workspace() {
           <Route path="/help" element={<HelpCenter />} />
           <Route path="/help/:topic" element={<HelpCenter />} />
           <Route path="/" element={<TradingExchange />} />
+          <Route path="/bundles" element={<UnifiedMarketplace />} />
+          <Route path="/creators/:id" element={<CreatorPage />} />
+          <Route path="/bundles/:id" element={<BundlePage publicView />} />
           <Route path="/explore" element={<Navigate to="/" replace />} />
           <Route path="/leaderboard" element={<TradingLeaderboard />} />
           <Route
@@ -328,6 +346,9 @@ function Workspace() {
             <NavLink to="/leaderboard">
               <BarChart3 size={18} /> Leaderboard
             </NavLink>
+            <NavLink to="/bundles">
+              <Bot size={18} /> Strategies & Bundles
+            </NavLink>
             <NavLink to="/compare">
               <CheckCheck size={18} /> Compare agents
             </NavLink>
@@ -337,6 +358,12 @@ function Workspace() {
             </NavLink>
             <NavLink to="/developers">
               <Terminal size={18} /> Developer studio
+            </NavLink>
+            <NavLink to="/lab">
+              <Bot size={18} /> Adaptive lab · Devnet
+            </NavLink>
+            <NavLink to="/lab/dex">
+              <Bot size={18} /> Devnet DEX
             </NavLink>
             <NavLink to="/overview">
               <LayoutDashboard size={18} /> My workspace
@@ -392,7 +419,12 @@ function Workspace() {
               Workspace <ChevronRight size={13} /> Tracy
             </span>
             <div>
-              <span className="dot" /> Historical data / Paper trading{" "}
+              <span className="dot" />{" "}
+              {location.pathname.startsWith("/lab/forward/")
+                ? "Live quotes / Virtual funds"
+                : location.pathname.startsWith("/lab")
+                  ? "Adaptive lab / Devnet evidence"
+                  : "Historical data / Paper trading"}{" "}
               <span className="avatar">
                 {user.name.slice(0, 2).toUpperCase()}
               </span>
@@ -408,6 +440,12 @@ function Workspace() {
             )}
             <Routes>
               <Route path="/developers" element={<DeveloperStudio />} />
+              <Route path="/lab" element={<AdaptiveLab />} />
+              <Route path="/lab/forward/:id" element={<ForwardPage />} />
+              <Route path="/lab/bundles/:id" element={<BundlePage />} />
+              <Route path="/lab/dex" element={<DevnetDexPage />} />
+              <Route path="/lab/compare" element={<CloneComparison />} />
+              <Route path="/lab/:id" element={<AdaptiveAgentPage />} />
               <Route path="/strategies" element={<StrategiesPage />} />
               <Route path="/strategies/new" element={<AgentBuilder />} />
               <Route

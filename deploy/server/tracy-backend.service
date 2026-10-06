@@ -1,0 +1,20 @@
+[Unit]
+Description=Tracy API and forward paper worker
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/tracy-backend
+ExecStart=%h/tracy-backend/.venv/bin/python -m uvicorn deploy.server.app:create_app --factory --host 127.0.0.1 --port 8108 --workers 1 --no-proxy-headers
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=45
+UMask=0077
+NoNewPrivileges=true
+MemoryMax=1G
+CPUQuota=100%
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+
+[Install]
+WantedBy=default.target
